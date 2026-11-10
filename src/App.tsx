@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
@@ -14,6 +14,66 @@ import { ReportsView } from './components/reports/ReportsView';
 import { AdminView } from './components/admin/AdminView';
 import { AIAssistantModal } from './components/ai/AIAssistantModal';
 
+
+// Public browser key only. No service-role credentials or database passwords.
+const SUPABASE_URL = 'https://vfqiudqoerfnmnkwugie.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_tR95J4J1ZQP0XpvoOUtEDA_guyXCWEm';
+
+const SupabaseConnectionPanel: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('Modo demostración: los expedientes todavía no se guardan en Supabase.');
+  const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
+  const [signedIn, setSignedIn] = useState(false);
+  const connect = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.access_token) throw new Error('No se pudo iniciar sesión. Verificá tus credenciales en Supabase.');
+      const membershipsResponse = await fetch(SUPABASE_URL + '/rest/v1/company_memberships?select=company_id,role&active=eq.true', {
+        headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + data.access_token }
+      });
+      if (!membershipsResponse.ok) throw new Error('Autenticación correcta, pero no se pudo verificar la membresía.');
+      const memberships = await membershipsResponse.json();
+      setAuthorizedCompanies(memberships.map((membership: {company_id:string;role:string}) => membership.company_id + ' (' + membership.role + ')'));
+      setSignedIn(true);
+      setPassword('');
+      setMessage(memberships.length ? 'Autenticación verificada. Acceso restringido por empresa.' : 'Autenticación correcta. Todavía no tenés una funeraria asignada; no se habilita el acceso a datos reales.');
+    } catch (error) {
+      setSignedIn(false);
+      setAuthorizedCompanies([]);
+      setMessage(error instanceof Error ? error.message : 'Error de conexión.');
+    } finally { setBusy(false); }
+  };
+  return <div className="border-b border-[#d9e4df] bg-[#eef4f0] px-4 py-2 text-xs text-[#31564e]">
+    <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+      <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Datos demo preservados</span>
+      <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} className="rounded-lg border border-[#c5d8cf] px-3 py-1.5 font-semibold hover:bg-white">{open ? 'Cerrar conexión' : 'Conectar cuenta'}</button>
+    </div>
+    {open && <div className="mx-auto mt-3 max-w-7xl rounded-xl border border-[#c5d8cf] bg-white p-4">
+      <p className="mb-3 font-medium">Acceso seguro a Funeraria Control — Supabase</p>
+      {!signedIn && <form onSubmit={connect} className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-48 flex-col gap-1">Correo electrónico<input required type="email" autoComplete="username" value={email} onChange={event=>setEmail(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
+        <label className="flex min-w-48 flex-col gap-1">Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
+        <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
+      </form>}
+      <p role="status" className="mt-3 text-[#49675e]">{message}</p>
+      {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
+      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Sesión local cerrada.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
+    </div>}
+  </div>;
+};
+
 const MainLayout: React.FC = () => {
   const { currentView, toastMessage } = useApp();
 
@@ -21,6 +81,8 @@ const MainLayout: React.FC = () => {
     <div className="fc-premium-shell min-h-screen flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
       {/* Top Bar Navigation */}
       <Header />
+
+      <SupabaseConnectionPanel />
 
       {/* Demo Banner */}
       <DemoBanner />
