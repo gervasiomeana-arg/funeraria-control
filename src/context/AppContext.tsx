@@ -234,19 +234,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createService = (newServiceData: Omit<FuneralService, 'createdAt' | 'updatedAt' | 'history'>): boolean => {
     const nowIso = new Date().toISOString();
 
-    // Check collision for room: is room already occupied?
+    // Demo guardrails: do not overwrite an occupied resource or cross company boundaries.
+    if (allServices.some((service) => service.id === newServiceData.id)) {
+      showToast('No se creó el expediente: el folio ya existe.');
+      return false;
+    }
+
+    if (!allBranchesState.some((branch) => branch.id === newServiceData.branchId && branch.companyId === activeCompanyId)) {
+      showToast('No se creó el expediente: sucursal no válida para esta funeraria.');
+      return false;
+    }
+
     if (newServiceData.roomId) {
       const room = allRooms.find((r) => r.id === newServiceData.roomId);
-      if (room && room.status === 'ocupada' && room.currentServiceId) {
-        showToast(`Advertencia: La sala ${room.name} ya está ocupada por otro servicio.`);
+      if (!room || room.companyId !== activeCompanyId || room.branchId !== newServiceData.branchId) {
+        showToast('No se creó el expediente: la capilla no pertenece a esta sucursal.');
+        return false;
+      }
+      if (room.currentServiceId && room.currentServiceId !== newServiceData.id) {
+        showToast(`No se creó el expediente: la capilla ${room.name} ya está asignada.`);
+        return false;
       }
     }
 
-    // Check collision for vehicle
     if (newServiceData.vehicleId) {
-      const veh = allVehicles.find((v) => v.id === newServiceData.vehicleId);
-      if (veh && veh.status === 'en_servicio' && veh.currentServiceId) {
-        showToast(`Advertencia: El vehículo ${veh.model} ya está asignado a otro cortejo.`);
+      const vehicle = allVehicles.find((v) => v.id === newServiceData.vehicleId);
+      if (!vehicle || vehicle.companyId !== activeCompanyId) {
+        showToast('No se creó el expediente: el vehículo no pertenece a esta funeraria.');
+        return false;
+      }
+      if (vehicle.currentServiceId && vehicle.currentServiceId !== newServiceData.id) {
+        showToast(`No se creó el expediente: el vehículo ${vehicle.model} ya está asignado.`);
+        return false;
       }
     }
 
