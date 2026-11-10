@@ -41,7 +41,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex-col shrink-0 min-h-[calc(100vh-57px)]">
+    <aside className="fc-premium-sidebar hidden md:flex w-64 border-r text-slate-300 flex-col shrink-0 min-h-[calc(100vh-57px)]">
       {/* Información de la funeraria */}
       <div className="p-4 border-b border-slate-800/80">
         <div className="flex items-center gap-2 text-xs text-amber-400 font-medium">
