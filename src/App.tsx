@@ -30,6 +30,7 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [recoveryToken, setRecoveryToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   useEffect(() => {
     // Supabase recovery redirects carry a short-lived token in the URL fragment.
     const params = new URLSearchParams(window.location.hash.slice(1));
@@ -43,6 +44,7 @@ const SupabaseConnectionPanel: React.FC = () => {
   }, []);
   const requestRecovery = async () => {
     if (!email.trim()) { setMessage('Ingresá primero tu correo electrónico.'); return; }
+    if (Date.now() < recoveryCooldownUntil) { setMessage('Ya se solicitó un correo recientemente. Esperá antes de volver a intentarlo.'); return; }
     setBusy(true);
     try {
       const response = await fetch(SUPABASE_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent('https://funeraria-control.ai.studio'), {
@@ -50,8 +52,13 @@ const SupabaseConnectionPanel: React.FC = () => {
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY },
         body: JSON.stringify({ email: email.trim() })
       });
-      if (!response.ok) throw new Error('No se pudo solicitar el correo de recuperación. Intentá nuevamente más tarde.');
-      setMessage('Si el correo está registrado, recibirás un enlace para establecer tu contraseña. Revisá también Spam.');
+      if (response.status === 429) {
+        setRecoveryCooldownUntil(Date.now() + 60 * 60 * 1000);
+        throw new Error('Supabase alcanzó el límite de correos (429). No vuelvas a solicitar otro durante al menos una hora. El límite del proyecto puede durar más.');
+      }
+      if (!response.ok) throw new Error('Supabase rechazó la solicitud (HTTP ' + response.status + '). Revisá la configuración de correo y los registros de Auth.');
+      setRecoveryCooldownUntil(Date.now() + 60 * 1000);
+      setMessage('Solicitud recibida. Si el correo está registrado y el proveedor permite el envío, recibirás un enlace. Revisá también Spam.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo solicitar el correo.'); }
     finally { setBusy(false); }
   };
@@ -116,7 +123,7 @@ const SupabaseConnectionPanel: React.FC = () => {
         <label className="flex min-w-48 flex-col gap-1">Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
       </form>}
-      {!signedIn && !recoveryMode && <button type="button" disabled={busy} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
+      {!signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Sesión local cerrada.');}} className="mt-3 underline">Cerrar sesión local</button>}
