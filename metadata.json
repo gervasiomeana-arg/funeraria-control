@@ -1,0 +1,6 @@
+{
+  "name": "Funeraria Control",
+  "description": "Plataforma SaaS moderna e inteligente de gestión integral para empresas funerarias independientes de México.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-brand: 'Cinzel', serif;
+  --color-navy-950: #070d1e;
+  --color-navy-900: #0b1426;
+  --color-navy-800: #121f38;
+  --color-navy-700: #1a2c4e;
+  --color-gold-400: #e2c17c;
+  --color-gold-500: #c9a45c;
+  --color-gold-600: #a7823b;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #1e293b;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
