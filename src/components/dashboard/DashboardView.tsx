@@ -1,475 +1,96 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import {
-  FolderHeart,
-  Calendar,
-  Users,
-  Building,
-  Car,
-  FileCheck2,
-  Receipt,
-  AlertCircle,
-  Clock,
-  ArrowRight,
-  Plus,
-  Sparkles,
-  ChevronRight,
-  CheckCircle2,
-  MapPin,
-} from 'lucide-react';
+import { FolderHeart, CalendarDays, Building2, CarFront, FileCheck2, Wallet, AlertTriangle, ArrowUpRight, Plus, Sparkles, ChevronRight, Clock3, MapPin, CheckCircle2, ArrowRight, Activity, ShieldCheck } from 'lucide-react';
 import { FuneralService } from '../../types';
 
+const money = (value: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(value);
+
 export const DashboardView: React.FC = () => {
-  const {
-    services,
-    rooms,
-    vehicles,
-    staff,
-    budgets,
-    alerts,
-    dismissAlert,
-    setCurrentView,
-    setSelectedService,
-    setIsNewServiceModalOpen,
-    setIsAiModalOpen,
-  } = useApp();
-
+  const { services, rooms, vehicles, budgets, alerts, dismissAlert, setCurrentView, setSelectedService, setIsNewServiceModalOpen, setIsAiModalOpen } = useApp();
   const [agendaTab, setAgendaTab] = useState<'hoy' | 'semana'>('hoy');
-
-  // Metrics calculations
-  const activeServices = services.filter((s) => s.currentStage !== 'finalizado');
-  const scheduledServices = services.filter((s) => s.currentStage === 'nuevo' || s.currentStage === 'documentacion');
-  const finishedServices = services.filter((s) => s.currentStage === 'finalizado');
-
-  const availableStaff = staff.filter((st) => st.status === 'disponible');
-  const occupiedRooms = rooms.filter((r) => r.status === 'ocupada');
-  const availableRooms = rooms.filter((r) => r.status === 'disponible');
-  const assignedVehicles = vehicles.filter((v) => v.status === 'en_servicio');
-
-  // Pending documentation count across active services
-  const pendingDocsCount = services.reduce((acc, s) => {
-    return acc + s.documents.filter((d) => d.status === 'pendiente').length;
-  }, 0);
-
-  // Unapproved or partially paid budgets
-  const pendingBudgets = budgets.filter((b) => b.status === 'borrador');
-  const pendingReceivablesMxn = budgets.reduce((acc, b) => {
-    const totalPaid = b.payments.reduce((sum, p) => sum + p.amountMxn, 0);
-    return acc + Math.max(0, b.totalMxn - totalPaid);
-  }, 0);
-
-  const getStageBadgeLabel = (stage: string) => {
-    switch (stage) {
-      case 'nuevo':
-        return 'Nuevo Expediente';
-      case 'documentacion':
-        return 'Trámite Documental';
-      case 'preparacion':
-        return 'En Preparación';
-      case 'traslado':
-        return 'En Traslado';
-      case 'velacion':
-        return 'En Velación';
-      case 'cremacion_inhumacion':
-        return 'Cortejo / Destino';
-      case 'finalizado':
-        return 'Concluido';
-      default:
-        return stage;
-    }
-  };
-
-  const handleOpenService = (service: FuneralService) => {
-    setSelectedService(service);
-    setCurrentView('servicios');
-  };
-
+  const active = services.filter(s => s.currentStage !== 'finalizado');
+  const scheduled = services.filter(s => s.currentStage === 'nuevo' || s.currentStage === 'documentacion');
+  const completed = services.filter(s => s.currentStage === 'finalizado');
+  const occupied = rooms.filter(r => r.status === 'ocupada');
+  const available = rooms.filter(r => r.status === 'disponible');
+  const assigned = vehicles.filter(v => v.status === 'en_servicio');
+  const pendingDocs = services.reduce((n,s) => n + s.documents.filter(d => d.status === 'pendiente').length, 0);
+  const receivables = budgets.reduce((n,b) => n + Math.max(0, b.totalMxn - b.payments.reduce((p,x) => p+x.amountMxn,0)),0);
+  const pendingBudgets = budgets.filter(b => b.status === 'borrador').length;
+  const openService = (s: FuneralService) => { setSelectedService(s); setCurrentView('servicios'); };
+  const stageLabel = (s: string) => ({nuevo:'Nuevo',documentacion:'Documentación',preparacion:'Preparación',traslado:'Traslado',velacion:'Velación',cremacion_inhumacion:'Cortejo / Destino',finalizado:'Concluido'} as Record<string,string>)[s] || s;
+  const kpis = [
+    {title:'Servicios activos',value:String(active.length).padStart(2,'0'),detail:`${scheduled.length} programados · ${completed.length} concluidos`,icon:FolderHeart},
+    {title:'Capillas ocupadas',value:`${occupied.length} / ${rooms.length}`,detail:`${available.length} disponibles`,icon:Building2},
+    {title:'Flota en servicio',value:`${assigned.length} / ${vehicles.length}`,detail:`${vehicles.length-assigned.length} unidades en base`,icon:CarFront},
+    {title:'Documentos pendientes',value:String(pendingDocs).padStart(2,'0'),detail:'Actas, certificados y permisos',icon:FileCheck2},
+    {title:'Saldo por cobrar',value:money(receivables),detail:`${pendingBudgets} presupuestos pendientes`,icon:Wallet}
+  ];
   return (
-    <div className="fc-dashboard-premium space-y-7">
-      {/* Premium editorial hero — existing actions and business data preserved */}
-      <div className="fc-dashboard-hero relative rounded-[24px] overflow-hidden border border-[#29474c] shadow-xl text-white">
-        <img
-          src="/src/assets/images/memorial_chapel_interior_1794336944272.jpg"
-          alt="Capilla Memorial Funeraria Control"
-          className="absolute inset-0 w-full h-full object-cover opacity-10"
-          referrerPolicy="no-referrer"
-        />
-        <div className="relative z-10 px-7 py-10 md:px-11 md:py-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-7 bg-gradient-to-r from-[#102b34] via-[#102b34]/95 to-[#1e3c40]/80">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="flex items-center gap-2 text-xs text-amber-300 font-medium">
-              <span className="uppercase tracking-[0.19em]">FUNERARIA CONTROL</span>
-              <span aria-hidden="true">·</span>
-              <span>Resumen ejecutivo</span>
-              <span aria-hidden="true">·</span>
-              <span className="text-slate-300">CDMX</span>
-            </div>
-            <h1 className="text-3xl md:text-[38px] leading-tight font-semibold tracking-tight text-white font-sans text-balance">
-              Gestión que acompaña cada momento
-            </h1>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Supervisión de capillas de velación, cortejos programados, expedientes legales y coordinación con familiares.
-            </p>
+    <div className="fc-dashboard-v2 space-y-7 pb-12">
+      <section className="relative overflow-hidden rounded-[26px] bg-[#102d34] text-white px-7 py-9 md:px-11 md:py-12 shadow-[0_18px_45px_rgba(14,43,49,.16)]">
+        <div aria-hidden="true" className="absolute right-[-110px] top-[-190px] h-[480px] w-[480px] rounded-full border border-[#c4a66e]/25 shadow-[0_0_0_65px_rgba(196,166,110,.035),0_0_0_135px_rgba(196,166,110,.025)]" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-8">
+          <div className="max-w-2xl">
+            <div className="mb-5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-[.22em] text-[#d3b77c]"><span className="h-[1px] w-9 bg-[#d3b77c]" /> PANEL EJECUTIVO <span className="text-white/45">/</span> OPERACIÓN DIARIA</div>
+            <h1 className="max-w-[620px] text-3xl md:text-[43px] leading-[1.12] font-semibold tracking-[-.04em]">Gestión que acompaña <span className="text-[#e2c992]">cada momento.</span></h1>
+            <p className="mt-5 max-w-xl text-sm md:text-base leading-7 text-[#c7d5d4]">Toda la operación de tu funeraria, organizada con claridad, respeto y atención a cada detalle.</p>
+            <div className="mt-7 flex flex-wrap items-center gap-4 text-xs text-[#c9d7d5]"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#9bd0b0]"/> Panel operativo</span><span className="inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#d3b77c]"/> Vista de demostración</span></div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              onClick={() => setIsNewServiceModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Registrar Servicio</span>
-            </button>
-            <button
-              onClick={() => setIsAiModalOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-lg transition-colors whitespace-nowrap"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Resumen de Prioridades (IA)</span>
-            </button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setIsNewServiceModalOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#d5b67b] px-5 py-3.5 text-sm font-semibold text-[#17323a] hover:bg-[#e9ce9a] transition-colors shadow-md"><Plus className="h-4 w-4"/> Nuevo expediente</button>
+            <button onClick={() => setIsAiModalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-5 py-3.5 text-sm font-medium text-white hover:bg-white/20 transition-colors"><Sparkles className="h-4 w-4 text-[#e2c992]"/> Asistente IA</button>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Alertas Operativas Urgentes */}
-      {alerts.length > 0 && (
-        <div className="fc-premium-alerts bg-[#fffaf7] border border-[#ead7cd] rounded-[20px] p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-red-900 font-semibold text-sm">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-              <span>Alertas Operativas Prioritarias ({alerts.length})</span>
-            </div>
-            <span className="text-xs text-red-700 font-medium">Atención requerida</span>
+      <section aria-label="Indicadores operativos" className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+        {kpis.map(({title,value,detail,icon:Icon},i) => (
+          <div key={title} className="group relative overflow-hidden rounded-[19px] border border-[#e7e1d5] bg-white px-5 py-5 shadow-[0_5px_22px_rgba(18,47,52,.055)]">
+            <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-[#64777a]">{title}</span><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f2f0e9] text-[#6c786c]"><Icon className="h-4 w-4"/></span></div>
+            <div className={`mt-4 font-semibold tracking-[-.05em] text-[#17353b] ${i===4?'text-xl md:text-[25px]':'text-3xl md:text-[35px]'}`}>{value}</div>
+            <div className="mt-3 text-[11px] leading-5 text-[#85908f]">{detail}</div>
+            <div className="absolute bottom-0 left-5 h-[3px] w-12 rounded-t-full bg-[#c4a66e]" />
           </div>
+        ))}
+      </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {alerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="bg-white border border-red-100 rounded-lg p-3 text-xs flex flex-col justify-between shadow-2xs"
-              >
-                <div>
-                  <div className="flex items-center justify-between text-slate-500 text-[11px] mb-1">
-                    <span className="font-medium text-red-700 uppercase tracking-wider">{alert.type}</span>
-                    <span>{alert.timestamp}</span>
-                  </div>
-                  <h4 className="font-semibold text-slate-900 text-xs mb-1">{alert.title}</h4>
-                  <p className="text-slate-600 text-[11px] leading-relaxed">{alert.description}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
-                  {alert.relatedServiceId ? (
-                    <button
-                      onClick={() => {
-                        const target = services.find((s) => s.id === alert.relatedServiceId);
-                        if (target) handleOpenService(target);
-                      }}
-                      className="text-amber-800 hover:text-amber-950 font-medium text-[11px] flex items-center gap-1"
-                    >
-                      <span>Ver {alert.relatedServiceId}</span>
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
-                  ) : <span />}
-                  <button
-                    onClick={() => dismissAlert(alert.id)}
-                    className="text-slate-500 hover:text-slate-800 text-[11px] underline"
-                  >
-                    Resolver
-                  </button>
-                </div>
-              </div>
-            ))}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <section className="xl:col-span-8 overflow-hidden rounded-[22px] border border-[#e6e1d8] bg-white shadow-[0_8px_32px_rgba(18,47,52,.045)]">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#eee9e0] px-6 py-6 md:px-7">
+            <div><div className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-[#ae9060]">SEGUIMIENTO</div><h2 className="text-xl font-semibold tracking-tight text-[#17353b]">Expedientes en curso</h2><p className="mt-1 text-xs text-[#7b8887]">Servicios activos y su avance operativo</p></div>
+            <button onClick={() => setCurrentView('servicios')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#e6e1d8] px-3.5 py-2 text-xs font-semibold text-[#31565a] hover:bg-[#f4f5f0]">Ver todos <ArrowUpRight className="h-4 w-4"/></button>
           </div>
-        </div>
-      )}
-
-      {/* Métricas Operativas Clave (KPI Grid - Single Elevation) */}
-      <div className="fc-premium-kpis grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Servicios Activos</span>
-            <FolderHeart className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-              {activeServices.length}
-            </span>
-            <span className="text-xs text-slate-500">en proceso</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5">
-            <span>{scheduledServices.length} programados</span>
-            <span aria-hidden="true">·</span>
-            <span>{finishedServices.length} concluidos</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Capillas / Salas</span>
-            <Building className="w-4 h-4 text-slate-700" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-              {occupiedRooms.length} / {rooms.length}
-            </span>
-            <span className="text-xs text-amber-700 font-medium">ocupadas</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            <span>{availableRooms.length} capillas disponibles</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Vehículos / Flota</span>
-            <Car className="w-4 h-4 text-slate-700" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-              {assignedVehicles.length} / {vehicles.length}
-            </span>
-            <span className="text-xs text-slate-600">en cortejo</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            <span>{vehicles.length - assignedVehicles.length} unidades en base</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Documentación</span>
-            <FileCheck2 className="w-4 h-4 text-slate-700" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-              {pendingDocsCount}
-            </span>
-            <span className="text-xs text-amber-700 font-medium">por validar</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            <span>Actas, certificados y permisos</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs col-span-2 md:col-span-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Saldos por Cobrar</span>
-            <Receipt className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-xl font-bold tracking-tight text-slate-900 tabular-nums">
-              ${(pendingReceivablesMxn / 1000).toFixed(1)}k
-            </span>
-            <span className="text-xs text-slate-500">MXN</span>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            <span>{pendingBudgets.length} cotizaciones pendientes</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2 Columnas de Detalle Operativo */}
-      <div className="fc-premium-columns grid grid-cols-1 lg:grid-cols-12 gap-7">
-        {/* Columna Izquierda: Servicios Funerarios en Curso (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">
-              Expedientes en seguimiento
-            </h2>
-            <button
-              onClick={() => setCurrentView('servicios')}
-              className="text-xs text-amber-800 hover:text-amber-950 font-medium flex items-center gap-1"
-            >
-              <span>Ver todos ({services.length})</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {activeServices.map((service) => {
-              const assignedRoom = rooms.find((r) => r.id === service.roomId);
-              const assignedVehicle = vehicles.find((v) => v.id === service.vehicleId);
-
-              return (
-                <div
-                  key={service.id}
-                  onClick={() => handleOpenService(service)}
-                  className="bg-white border border-slate-200 hover:border-amber-400/80 rounded-xl p-4 transition-all cursor-pointer shadow-2xs"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <span className="font-mono font-medium text-slate-800">{service.id}</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="capitalize">{service.serviceType.replace('_', ' ')}</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-amber-800 font-medium">{getStageBadgeLabel(service.currentStage)}</span>
-                      </div>
-                      <h3 className="text-base font-semibold text-slate-900 hover:text-amber-800 transition-colors">
-                        {service.deceased.fullName}
-                      </h3>
-                      <p className="text-xs text-slate-600">
-                        Familiar responsable: {service.familyContact.fullName} ({service.familyContact.relationship}) · Tel: {service.familyContact.phone}
-                      </p>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <span className="text-xs text-slate-500 block">Horario de capilla</span>
-                      <span className="text-xs font-semibold text-slate-800 font-mono">
-                        {service.wakeStartTime ? `${service.wakeStartTime} - ${service.wakeEndTime || 'Cierre'}` : 'Sin velación'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Asignaciones de recursos y destino */}
-                  <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{assignedRoom ? assignedRoom.name : 'Sin capilla asignada'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Car className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{assignedVehicle ? assignedVehicle.model : 'Sin vehículo asignado'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 truncate">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{service.destinationPlace}</span>
-                    </div>
-                  </div>
-
-                  {/* Barra de progreso de etapas */}
-                  <div className="mt-3 flex items-center gap-1.5">
-                    {service.requiredStages.map((stageKey, idx) => {
-                      const stageIdx = service.requiredStages.indexOf(service.currentStage);
-                      const isCompleted = idx < stageIdx;
-                      const isCurrent = stageKey === service.currentStage;
-
-                      return (
-                        <div
-                          key={stageKey}
-                          className={`h-1.5 flex-1 rounded-full transition-all ${
-                            isCompleted
-                              ? 'bg-amber-600'
-                              : isCurrent
-                              ? 'bg-amber-400 animate-pulse'
-                              : 'bg-slate-100'
-                          }`}
-                          title={`Etapa: ${stageKey}`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              );
+          <div className="divide-y divide-[#eeeae3]">
+            {active.length===0 && <div className="p-8 text-sm text-[#718080]">No hay expedientes activos.</div>}
+            {active.slice(0,5).map(s => {
+              const room=rooms.find(r=>r.id===s.roomId);
+              const vehicle=vehicles.find(v=>v.id===s.vehicleId);
+              const stageIdx=s.requiredStages.indexOf(s.currentStage);
+              return <button key={s.id} onClick={()=>openService(s)} className="block w-full px-6 py-6 md:px-7 text-left transition-colors hover:bg-[#faf9f5] focus-visible:outline-2 focus-visible:outline-[#c4a66e]">
+                <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-[11px] font-semibold tracking-wider text-[#b08c50]">{s.id}</span><span className="rounded-full bg-[#edf3ef] px-3 py-1 text-[11px] font-medium text-[#326259]">{stageLabel(s.currentStage)}</span></div>
+                <div className="mt-2 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-[#1c3940]">{s.deceased.fullName}</h3><p className="mt-1 text-xs text-[#81908f]">{s.familyContact.fullName} · {s.familyContact.relationship}</p></div><ChevronRight className="h-5 w-5 shrink-0 text-[#9ca8a4]"/></div>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-[#677b7a]"><span className="inline-flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5"/>{room?.name || 'Sin capilla'}</span><span className="inline-flex items-center gap-1.5"><CarFront className="h-3.5 w-3.5"/>{vehicle?.model || 'Sin vehículo'}</span><span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{s.destinationPlace}</span></div>
+                <div className="mt-4 flex gap-1.5">{s.requiredStages.map((stage,i)=><span key={stage} title={stageLabel(stage)} className={`h-1.5 flex-1 rounded-full ${i<stageIdx?'bg-[#326b61]':i===stageIdx?'bg-[#c4a66e]':'bg-[#edf0ed]'}`}/>)}</div>
+              </button>;
             })}
           </div>
-        </div>
-
-        {/* Columna Derecha: Agenda y Actividades Prioritarias (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">
-              Agenda y próximos compromisos
-            </h2>
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-              <button
-                onClick={() => setAgendaTab('hoy')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  agendaTab === 'hoy'
-                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Hoy
-              </button>
-              <button
-                onClick={() => setAgendaTab('semana')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  agendaTab === 'semana'
-                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Semana
-              </button>
+        </section>
+        <div className="xl:col-span-4 space-y-6">
+          <section className="rounded-[22px] border border-[#e6e1d8] bg-white p-6 shadow-[0_8px_32px_rgba(18,47,52,.045)]">
+            <div className="flex items-start justify-between gap-3"><div><div className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-[#ae9060]">PLANIFICACIÓN</div><h2 className="text-xl font-semibold text-[#17353b]">Agenda operativa</h2></div><CalendarDays className="h-5 w-5 text-[#a68b5d]"/></div>
+            <div className="mt-5 flex gap-2 rounded-xl bg-[#f4f3ee] p-1"><button onClick={()=>setAgendaTab('hoy')} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${agendaTab==='hoy'?'bg-white text-[#17353b] shadow-sm':'text-[#82908b]'}`}>Hoy</button><button onClick={()=>setAgendaTab('semana')} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${agendaTab==='semana'?'bg-white text-[#17353b] shadow-sm':'text-[#82908b]'}`}>Semana</button></div>
+            <div className="mt-5 space-y-0 border-l border-[#e4e4d9] pl-5">
+              {active.slice(0,3).map((s,i)=><button key={s.id} onClick={()=>openService(s)} className="relative block w-full border-b border-[#efeee7] py-4 text-left last:border-0"><span className="absolute -left-[26px] top-5 h-3 w-3 rounded-full border-[3px] border-white bg-[#b99b68] shadow-sm"/><span className="text-[11px] font-semibold text-[#a88b5b]">{agendaTab==='hoy'?'SERVICIO':'EN SEGUIMIENTO'} {String(i+1).padStart(2,'0')}</span><span className="mt-1 block text-sm font-semibold text-[#254047]">{s.deceased.fullName}</span><span className="mt-1 block text-xs text-[#8b9794]">{stageLabel(s.currentStage)} · {s.wakeStartTime || 'Horario a confirmar'}</span></button>)}
+              {active.length===0 && <p className="py-4 text-xs text-[#7c8a86]">Sin actividades registradas.</p>}
             </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-500 pb-2 border-b border-slate-100">
-              <span className="font-medium text-slate-800">
-                {agendaTab === 'hoy' ? 'Horario de Hoy (10 Nov 2026)' : 'Vista de la Semana (10 - 16 Nov)'}
-              </span>
-              <button
-                onClick={() => setCurrentView('agenda')}
-                className="text-amber-800 hover:text-amber-950 font-medium"
-              >
-                Ver calendario completo
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {/* Evento 1 */}
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
-                <div className="flex flex-col items-center justify-center w-12 py-1 bg-white border border-slate-200 rounded text-center shrink-0">
-                  <span className="text-[10px] text-slate-500 uppercase">Inicio</span>
-                  <span className="font-bold text-slate-800 font-mono">09:00</span>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-slate-900">Capilla Imperial en Velación</p>
-                  <p className="text-slate-600">Don Alejandro Valenzuela Mendoza</p>
-                  <p className="text-[11px] text-slate-500">Misa programada a las 16:00 hrs · Salida cortejo 18:45 hrs</p>
-                </div>
-              </div>
-
-              {/* Evento 2 */}
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
-                <div className="flex flex-col items-center justify-center w-12 py-1 bg-white border border-slate-200 rounded text-center shrink-0">
-                  <span className="text-[10px] text-slate-500 uppercase">Apertura</span>
-                  <span className="font-bold text-slate-800 font-mono">15:00</span>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-slate-900">Capilla San Pedro: Homenaje</p>
-                  <p className="text-slate-600">Sra. Beatriz Ramos Escobedo</p>
-                  <p className="text-[11px] text-amber-700">Verificar llegada de ataúd y flores a las 14:30 hrs</p>
-                </div>
-              </div>
-
-              {/* Evento 3 */}
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
-                <div className="flex flex-col items-center justify-center w-12 py-1 bg-white border border-slate-200 rounded text-center shrink-0">
-                  <span className="text-[10px] text-slate-500 uppercase">Traslado</span>
-                  <span className="font-bold text-slate-800 font-mono">18:45</span>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-slate-900">Salida de Cortejo a Panteón Francés</p>
-                  <p className="text-slate-600">Carroza Lincoln Continental Presidencial (Don Mario Mendoza)</p>
-                  <p className="text-[11px] text-slate-500">Expediente EXP-2026-089</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Lista de Actividades Prioritarias */}
-            <div className="pt-3 border-t border-slate-100">
-              <h4 className="text-xs font-semibold text-slate-800 mb-2">
-                Tareas Prioritarias de Personal
-              </h4>
-              <ul className="space-y-1.5 text-xs text-slate-600">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Recolectar acta de defunción certificada en Registro Civil 14</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  <span>Coordinar prueba de audio y streaming en Capilla San Pedro</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  <span>Recepción de flores de condolencia de Arte Floral San Ángel</span>
-                </li>
-              </ul>
-            </div>
-          </div>
+            <button onClick={()=>setCurrentView('agenda')} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#eff3ef] py-3 text-xs font-semibold text-[#315b57] hover:bg-[#e2eae3]">Abrir agenda completa <ArrowRight className="h-4 w-4"/></button>
+          </section>
+          <section className="rounded-[22px] bg-[#193b40] p-6 text-white shadow-lg"><div className="flex items-center gap-2 text-[#d9c08b]"><Activity className="h-4 w-4"/><span className="text-[10px] font-bold uppercase tracking-[.2em]">ESTADO OPERATIVO</span></div><h2 className="mt-4 text-xl font-semibold">Atención a los detalles</h2><p className="mt-2 text-xs leading-6 text-[#c1d0cd]">{alerts.length} alertas activas requieren seguimiento. Consultá las prioridades para mantener cada servicio coordinado.</p><button onClick={()=>setIsAiModalOpen(true)} className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-[#e1c58f]">Ver prioridades con IA <ArrowUpRight className="h-4 w-4"/></button></section>
         </div>
       </div>
+      {alerts.length>0 && <section className="rounded-[22px] border border-[#e9ded1] bg-[#fcfaf6] p-6 md:p-7"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-[#ae784c]"/><h2 className="text-lg font-semibold text-[#27434a]">Alertas que requieren atención</h2><span className="rounded-full bg-[#efe4d5] px-2.5 py-1 text-xs font-semibold text-[#8d6647]">{alerts.length}</span></div></div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{alerts.map(a=><article key={a.id} className="rounded-2xl border border-[#eee6db] bg-white p-5"><div className="flex justify-between gap-2 text-[10px] uppercase tracking-wider text-[#b27e53]"><span className="font-bold">{a.type}</span><span className="normal-case tracking-normal text-[#9aa4a0]">{a.timestamp}</span></div><h3 className="mt-3 text-sm font-semibold text-[#25434a]">{a.title}</h3><p className="mt-2 text-xs leading-5 text-[#75827f]">{a.description}</p><div className="mt-4 flex items-center justify-between gap-2 border-t border-[#f1ede7] pt-3">{a.relatedServiceId?<button onClick={()=>{const s=services.find(x=>x.id===a.relatedServiceId);if(s)openService(s);}} className="text-xs font-semibold text-[#a38350]">Ver expediente <ChevronRight className="inline h-3 w-3"/></button>:<span/>}<button onClick={()=>dismissAlert(a.id)} className="inline-flex items-center gap-1 text-xs text-[#607c73] hover:underline"><CheckCircle2 className="h-3.5 w-3.5"/> Resolver</button></div></article>)}</div></section>}
+      <div className="flex items-center justify-center gap-2 text-[11px] text-[#9ba6a0]"><Clock3 className="h-3.5 w-3.5"/> Datos de demostración · Panel de gestión funeraria</div>
     </div>
   );
 };
