@@ -18,7 +18,7 @@ const MainLayout: React.FC = () => {
   const { currentView, toastMessage } = useApp();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 selection:bg-amber-100 selection:text-amber-900">
+    <div className="fc-premium-shell min-h-screen flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
       {/* Top Bar Navigation */}
       <Header />
 
@@ -31,7 +31,7 @@ const MainLayout: React.FC = () => {
         <Sidebar />
 
         {/* Content Viewport */}
-        <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full overflow-x-hidden">
+        <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
           {currentView === 'dashboard' && <DashboardView />}
           {currentView === 'servicios' && <ServicesView />}
           {currentView === 'agenda' && <ScheduleView />}

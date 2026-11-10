@@ -30,3 +30,25 @@ body {
     display: block !important;
   }
 }
+
+/* Funeraria Control | Premium UI — visual only; preserves existing business logic */
+:root { --fc-ink:#142d35; --fc-petrol:#102a32; --fc-petrol-deep:#0b2029; --fc-champagne:#b7955b; --fc-ivory:#f7f5f0; }
+body { background:var(--fc-ivory); color:var(--fc-ink); font-family:'Plus Jakarta Sans',system-ui,sans-serif; }
+.fc-premium-shell { background:var(--fc-ivory); color:var(--fc-ink); }
+.fc-premium-header { background:var(--fc-petrol-deep); border-bottom:1px solid #28414a; box-shadow:0 5px 25px #0b20291c; }
+.fc-premium-sidebar { background:var(--fc-petrol); border-color:#28414a; }
+.fc-premium-sidebar nav button { border-radius:11px; min-height:43px; transition:background .18s ease,transform .18s ease; }
+.fc-premium-sidebar nav button:hover { background:#24414a; transform:translateX(2px); }
+.fc-premium-sidebar nav button[class*="bg-amber-400"] { background:#2a4449; border-left-color:var(--fc-champagne); color:#f4e8d0; }
+.fc-premium-main { max-width:1480px; }
+.fc-premium-main > div { max-width:100%; }
+.fc-premium-main .bg-white { border-color:#e8e3d9; box-shadow:0 6px 24px #1630390b; }
+.fc-premium-main .rounded-xl,.fc-premium-main .rounded-2xl { border-radius:16px; }
+.fc-premium-main h1,.fc-premium-main h2,.fc-premium-main h3 { letter-spacing:-.025em; }
+.fc-premium-main button { transition:filter .2s ease,box-shadow .2s ease,transform .2s ease; }
+.fc-premium-main button:hover { filter:saturate(1.08); }
+.fc-premium-main button:focus-visible,.fc-premium-sidebar button:focus-visible,.fc-premium-header button:focus-visible { outline:2px solid #c6a16b; outline-offset:3px; }
+.fc-premium-header .bg-gradient-to-br,.fc-premium-header .bg-gradient-to-r { background:linear-gradient(135deg,#e0c18b,#b18a4f); }
+.fc-premium-header [class*="text-amber-"] { color:#e1c38e; }
+.fc-premium-main [class*="bg-slate-50"] { background-color:#f8f7f4; }
+@media (prefers-reduced-motion:reduce) { .fc-premium-shell *, .fc-premium-shell *::before,.fc-premium-shell *::after { transition:none!important; animation:none!important; } }
