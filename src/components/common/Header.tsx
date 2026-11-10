@@ -45,7 +45,7 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 md:gap-8 px-4 md:px-6 py-3 bg-slate-900 border-b border-slate-800 text-slate-100">
+    <header className="fc-premium-header sticky top-0 z-30 flex items-center justify-between gap-4 md:gap-8 px-4 md:px-6 py-3 text-slate-100">
       {/* Zona 1: Brand title, one line wordmark + mobile hamburger */}
       <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
         <button
