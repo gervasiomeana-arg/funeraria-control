@@ -85,26 +85,26 @@ export const DashboardView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Hero Strip de Bienvenida y Acción Rápida con imagen de Capilla */}
-      <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-xs bg-slate-900 text-white">
+    <div className="fc-dashboard-premium space-y-7">
+      {/* Premium editorial hero — existing actions and business data preserved */}
+      <div className="fc-dashboard-hero relative rounded-[24px] overflow-hidden border border-[#29474c] shadow-xl text-white">
         <img
           src="/src/assets/images/memorial_chapel_interior_1794336944272.jpg"
           alt="Capilla Memorial Funeraria Control"
-          className="absolute inset-0 w-full h-full object-cover opacity-25"
+          className="absolute inset-0 w-full h-full object-cover opacity-10"
           referrerPolicy="no-referrer"
         />
-        <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-gradient-to-r from-slate-950 via-slate-900/90 to-transparent">
+        <div className="relative z-10 px-7 py-10 md:px-11 md:py-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-7 bg-gradient-to-r from-[#102b34] via-[#102b34]/95 to-[#1e3c40]/80">
           <div className="space-y-1.5 max-w-2xl">
             <div className="flex items-center gap-2 text-xs text-amber-300 font-medium">
-              <span>Panel Operativo Central</span>
+              <span className="uppercase tracking-[0.19em]">FUNERARIA CONTROL</span>
               <span aria-hidden="true">·</span>
-              <span>Gestión de Hoy</span>
+              <span>Resumen ejecutivo</span>
               <span aria-hidden="true">·</span>
               <span className="text-slate-300">CDMX</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white font-sans text-balance">
-              Operaciones Funerarias y Homenajes
+            <h1 className="text-3xl md:text-[38px] leading-tight font-semibold tracking-tight text-white font-sans text-balance">
+              Gestión que acompaña cada momento
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
               Supervisión de capillas de velación, cortejos programados, expedientes legales y coordinación con familiares.
@@ -132,7 +132,7 @@ export const DashboardView: React.FC = () => {
 
       {/* Alertas Operativas Urgentes */}
       {alerts.length > 0 && (
-        <div className="bg-red-50/70 border border-red-200 rounded-xl p-4">
+        <div className="fc-premium-alerts bg-[#fffaf7] border border-[#ead7cd] rounded-[20px] p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-red-900 font-semibold text-sm">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -182,7 +182,7 @@ export const DashboardView: React.FC = () => {
       )}
 
       {/* Métricas Operativas Clave (KPI Grid - Single Elevation) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+      <div className="fc-premium-kpis grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 text-xs">
             <span>Servicios Activos</span>
@@ -267,12 +267,12 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* 2 Columnas de Detalle Operativo */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="fc-premium-columns grid grid-cols-1 lg:grid-cols-12 gap-7">
         {/* Columna Izquierda: Servicios Funerarios en Curso (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">
-              Servicios y Homenajes en Curso
+              Expedientes en seguimiento
             </h2>
             <button
               onClick={() => setCurrentView('servicios')}
@@ -367,7 +367,7 @@ export const DashboardView: React.FC = () => {
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">
-              Agenda y Cronograma Operativo
+              Agenda y próximos compromisos
             </h2>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
               <button
