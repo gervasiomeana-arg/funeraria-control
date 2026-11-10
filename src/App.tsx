@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
@@ -27,6 +27,52 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [message, setMessage] = useState('Modo demostración: los expedientes todavía no se guardan en Supabase.');
   const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
   const [signedIn, setSignedIn] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  useEffect(() => {
+    // Supabase recovery redirects carry a short-lived token in the URL fragment.
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    if (params.get('type') === 'recovery' && params.get('access_token')) {
+      setRecoveryToken(params.get('access_token') || '');
+      setRecoveryMode(true);
+      setOpen(true);
+      setMessage('Enlace verificado. Elegí una contraseña nueva para completar la activación.');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+  const requestRecovery = async () => {
+    if (!email.trim()) { setMessage('Ingresá primero tu correo electrónico.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch(SUPABASE_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent('https://funeraria-control.ai.studio'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY },
+        body: JSON.stringify({ email: email.trim() })
+      });
+      if (!response.ok) throw new Error('No se pudo solicitar el correo de recuperación. Intentá nuevamente más tarde.');
+      setMessage('Si el correo está registrado, recibirás un enlace para establecer tu contraseña. Revisá también Spam.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo solicitar el correo.'); }
+    finally { setBusy(false); }
+  };
+  const saveNewPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (newPassword.length < 12) { setMessage('Usá una contraseña de al menos 12 caracteres.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch(SUPABASE_URL + '/auth/v1/user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + recoveryToken },
+        body: JSON.stringify({ password: newPassword })
+      });
+      if (!response.ok) throw new Error('El enlace expiró o no es válido. Solicitá uno nuevo.');
+      setRecoveryToken('');
+      setNewPassword('');
+      setRecoveryMode(false);
+      setMessage('Contraseña establecida correctamente. Ya podés iniciar sesión.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar la contraseña.'); }
+    finally { setBusy(false); }
+  };
   const connect = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -61,11 +107,16 @@ const SupabaseConnectionPanel: React.FC = () => {
     </div>
     {open && <div className="mx-auto mt-3 max-w-7xl rounded-xl border border-[#c5d8cf] bg-white p-4">
       <p className="mb-3 font-medium">Acceso seguro a Funeraria Control — Supabase</p>
-      {!signedIn && <form onSubmit={connect} className="flex flex-wrap items-end gap-2">
+      {recoveryMode && recoveryToken && <form onSubmit={saveNewPassword} className="mb-4 flex flex-wrap items-end gap-2">
+        <label className="flex min-w-60 flex-col gap-1">Nueva contraseña (mínimo 12 caracteres)<input required type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event=>setNewPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
+        <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Establecer contraseña'}</button>
+      </form>}
+      {!signedIn && !recoveryMode && <form onSubmit={connect} className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-48 flex-col gap-1">Correo electrónico<input required type="email" autoComplete="username" value={email} onChange={event=>setEmail(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <label className="flex min-w-48 flex-col gap-1">Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
       </form>}
+      {!signedIn && !recoveryMode && <button type="button" disabled={busy} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Sesión local cerrada.');}} className="mt-3 underline">Cerrar sesión local</button>}
