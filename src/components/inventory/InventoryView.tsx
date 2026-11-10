@@ -19,6 +19,11 @@ export const InventoryView: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
+  const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [movementItemId, setMovementItemId] = useState(inventory[0]?.id || '');
+  const [movementType, setMovementType] = useState<'entrada' | 'salida'>('salida');
+  const [movementQty, setMovementQty] = useState<number>(1);
+  const [movementReason, setMovementReason] = useState('Asignación a servicio funerario');
 
   // Nuevo item form
   const [name, setName] = useState('');
@@ -105,13 +110,25 @@ export const InventoryView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsNewItemModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm whitespace-nowrap self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo Producto</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => {
+              setMovementItemId(inventory[0]?.id || '');
+              setIsMovementModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-2xs whitespace-nowrap"
+          >
+            <Boxes className="w-4 h-4 text-slate-600" />
+            <span>Registrar Movimiento</span>
+          </button>
+          <button
+            onClick={() => setIsNewItemModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo Producto</span>
+          </button>
+        </div>
       </div>
 
       {/* Alerta de Stock Bajo */}
@@ -367,6 +384,103 @@ export const InventoryView: React.FC = () => {
                   className="px-4 py-2 font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg shadow-sm"
                 >
                   Guardar Producto
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Registrar Movimiento de Almacén */}
+      {isMovementModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 border border-slate-200 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="font-bold text-slate-900 text-sm">Registrar Movimiento de Almacén</h3>
+              <button onClick={() => setIsMovementModalOpen(false)}><X className="w-4 h-4 text-slate-400" /></button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const delta = movementType === 'entrada' ? Number(movementQty) : -Number(movementQty);
+                const success = adjustInventoryStock(movementItemId, delta, movementReason);
+                if (success) {
+                  setIsMovementModalOpen(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Producto / Modelo *</label>
+                <select
+                  value={movementItemId}
+                  onChange={(e) => setMovementItemId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                  required
+                >
+                  {inventory.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.sku} - {item.name} (Stock: {item.stockCurrent})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Tipo de Movimiento</label>
+                  <select
+                    value={movementType}
+                    onChange={(e) => setMovementType(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="salida">Salida (Servicio Funerario)</option>
+                    <option value="entrada">Entrada (Compra / Suministro)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Cantidad *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={movementQty}
+                    onChange={(e) => setMovementQty(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Motivo / Folio de Expediente</label>
+                <input
+                  type="text"
+                  value={movementReason}
+                  onChange={(e) => setMovementReason(e.target.value)}
+                  placeholder="Ej. Asignado a expediente EXP-2026-089"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  required
+                />
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
+                <span>Salvaguarda activa: el sistema bloqueará movimientos que resulten en existencias negativas.</span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsMovementModalOpen(false)}
+                  className="px-3 py-1.5 text-slate-600 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg shadow-sm"
+                >
+                  Registrar Movimiento
                 </button>
               </div>
             </form>

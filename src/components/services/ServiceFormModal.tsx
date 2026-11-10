@@ -296,14 +296,20 @@ export const ServiceFormModal: React.FC<Props> = ({ onClose }) => {
                     <select
                       value={roomId}
                       onChange={(e) => setRoomId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500 bg-white"
                     >
+                      <option value="">Sin capilla de velación</option>
                       {rooms.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} ({r.status})
+                          {r.name} {r.status === 'ocupada' ? '(Ocupada)' : r.status === 'reservada' ? '(Reservada)' : '(Disponible)'}
                         </option>
                       ))}
                     </select>
+                    {rooms.find((r) => r.id === roomId)?.status === 'ocupada' && (
+                      <p className="text-[10px] text-amber-800 bg-amber-50 p-1.5 rounded mt-1 border border-amber-200">
+                        Atención: Capilla ocupada por otro servicio ({rooms.find((r) => r.id === roomId)?.currentServiceDeceasedName}).
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block font-medium mb-1">Horario Inicio</label>
@@ -332,14 +338,20 @@ export const ServiceFormModal: React.FC<Props> = ({ onClose }) => {
                   <select
                     value={vehicleId}
                     onChange={(e) => setVehicleId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500 bg-white"
                   >
+                    <option value="">Sin vehículo asignado</option>
                     {vehicles.map((v) => (
                       <option key={v.id} value={v.id}>
-                        {v.model} ({v.status})
+                        {v.model} {v.status === 'en_servicio' ? '(En servicio)' : '(Disponible)'}
                       </option>
                     ))}
                   </select>
+                  {vehicles.find((v) => v.id === vehicleId)?.status === 'en_servicio' && (
+                    <p className="text-[10px] text-amber-800 bg-amber-50 p-1.5 rounded mt-1 border border-amber-200">
+                      Atención: La unidad está actualmente asignada a otro cortejo.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-medium mb-1">Director Funerario Coordinador</label>

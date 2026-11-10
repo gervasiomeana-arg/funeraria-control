@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp, MainViewKey } from '../../context/AppContext';
-import { Plus, Sparkles, Building2, UserCircle2, ChevronDown, Check } from 'lucide-react';
+import { Plus, Sparkles, Building2, UserCircle2, ChevronDown, Check, Menu, X, LayoutDashboard, FolderHeart, CalendarDays, HeartHandshake, Receipt, Boxes, UsersRound, BarChart3, Sliders } from 'lucide-react';
 import { UserRole } from '../../types';
 
 export const Header: React.FC = () => {
@@ -15,6 +15,10 @@ export const Header: React.FC = () => {
     activeBranchId,
     setActiveBranchId,
     branches,
+    currentView,
+    setCurrentView,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
   } = useApp();
 
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
@@ -28,18 +32,38 @@ export const Header: React.FC = () => {
     { key: 'superadmin', label: 'Superadministrador SaaS' },
   ];
 
+  const navItems = [
+    { key: 'dashboard', label: '1. Inicio', icon: LayoutDashboard },
+    { key: 'servicios', label: '2. Servicios', icon: FolderHeart },
+    { key: 'agenda', label: '3. Agenda', icon: CalendarDays },
+    { key: 'familias', label: '4. Familias', icon: HeartHandshake },
+    { key: 'presupuestos', label: '5. Presupuestos', icon: Receipt },
+    { key: 'inventario', label: '6. Inventario', icon: Boxes },
+    { key: 'recursos', label: '7. Personal y recursos', icon: UsersRound },
+    { key: 'reportes', label: '8. Reportes', icon: BarChart3 },
+    { key: 'admin', label: '9. Administración', icon: Sliders },
+  ];
+
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-8 px-6 py-3.5 bg-slate-900 border-b border-slate-800 text-slate-100">
-      {/* Zona 1: Brand title, one line wordmark */}
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 md:gap-8 px-4 md:px-6 py-3 bg-slate-900 border-b border-slate-800 text-slate-100">
+      {/* Zona 1: Brand title, one line wordmark + mobile hamburger */}
       <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+          title="Abrir menú"
+        >
+          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-bold text-sm shadow-sm">
           FC
         </div>
         <div className="flex flex-col">
-          <span className="text-base font-semibold tracking-wide text-white uppercase font-sans">
+          <span className="text-sm md:text-base font-semibold tracking-wide text-white uppercase font-sans">
             Funeraria Control
           </span>
-          <span className="text-[11px] text-amber-300/80 font-normal">
+          <span className="text-[10px] md:text-[11px] text-amber-300/80 font-normal">
             Plataforma Integral Exequial
           </span>
         </div>
@@ -159,12 +183,105 @@ export const Header: React.FC = () => {
       <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={() => setIsNewServiceModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-lg shadow-sm transition-all whitespace-nowrap shrink-0"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 text-xs font-semibold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-lg shadow-sm transition-all whitespace-nowrap shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Nuevo Expediente</span>
+          <span className="hidden sm:inline">Nuevo Expediente</span>
+          <span className="sm:hidden">Nuevo</span>
         </button>
       </div>
+
+      {/* Menú Móvil Desplegable (Mobile Drawer) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <div className="relative w-72 max-w-[85vw] bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col p-4 shadow-2xl z-10 overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <span className="font-bold text-white text-sm">Menú Funeraria Control</span>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Selector de Empresa en Móvil */}
+            <div className="py-3 border-b border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Funeraria Activa:</span>
+              <select
+                value={activeCompany.id}
+                onChange={(e) => setActiveCompanyId(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-amber-300 font-medium"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Selector de Rol en Móvil */}
+            <div className="py-3 border-b border-slate-800 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Rol de Demostración:</span>
+              <select
+                value={currentUser.role}
+                onChange={(e) => setCurrentUserRole(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200"
+              >
+                {roles.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Enlaces de los 9 Módulos */}
+            <nav className="py-3 space-y-1 flex-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentView === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => {
+                      setCurrentView(item.key as any);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                      isActive
+                        ? 'bg-amber-400/20 text-amber-300 font-bold border-l-2 border-amber-400'
+                        : 'text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Asistente IA en móvil */}
+            <div className="pt-3 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  setIsAiModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Asistente Ético IA</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -21,7 +21,8 @@ export const BudgetsView: React.FC = () => {
   const { budgets, createBudget, addPaymentToBudget, services, activeCompany } = useApp();
 
   const [activeTab, setActiveTab] = useState<'presupuestos' | 'paquetes' | 'contrato'>('presupuestos');
-  const [selectedBudget, setSelectedBudget] = useState<Budget | null>(budgets[0] || null);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
+  const selectedBudget = budgets.find((b) => b.id === selectedBudgetId) || budgets[0] || null;
 
   // Modal para registrar abono / pago
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -167,7 +168,7 @@ export const BudgetsView: React.FC = () => {
                 return (
                   <div
                     key={b.id}
-                    onClick={() => setSelectedBudget(b)}
+                    onClick={() => setSelectedBudgetId(b.id)}
                     className={`p-4 rounded-xl border text-xs cursor-pointer transition-all ${
                       isSelected
                         ? 'bg-amber-50/70 border-amber-400 shadow-2xs ring-1 ring-amber-400'

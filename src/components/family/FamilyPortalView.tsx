@@ -17,6 +17,7 @@ import {
 export const FamilyPortalView: React.FC = () => {
   const {
     services,
+    allServices,
     condolences,
     addCondolence,
     viewingFamilyServiceCode,
@@ -30,10 +31,10 @@ export const FamilyPortalView: React.FC = () => {
   const [condolenceText, setCondolenceText] = useState('');
   const [lightCandle, setLightCandle] = useState(true);
 
-  // Find matching service by code
-  const currentService = services.find(
+  // Find matching service by code across all services
+  const currentService = allServices.find(
     (s) => s.familyPortalCode.toLowerCase() === inputCode.trim().toLowerCase()
-  ) || services[0];
+  ) || services[0] || allServices[0];
 
   const assignedRoom = rooms.find((r) => r.id === currentService?.roomId);
   const serviceCondolences = condolences.filter((c) => c.serviceId === currentService?.id);

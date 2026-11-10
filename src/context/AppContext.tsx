@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   Company,
   Branch,
@@ -52,19 +52,21 @@ interface AppContextType {
   companies: Company[];
   updateCompanyStatus: (id: string, status: 'activa' | 'prueba' | 'suspendida') => void;
   branches: Branch[];
+  allBranches: Branch[];
   activeBranchId: string;
   setActiveBranchId: (id: string) => void;
 
-  // Services
+  // Services (Filtered by activeCompany)
   services: FuneralService[];
+  allServices: FuneralService[];
   selectedService: FuneralService | null;
   setSelectedService: (service: FuneralService | null) => void;
-  createService: (newService: Omit<FuneralService, 'createdAt' | 'updatedAt' | 'history'>) => void;
+  createService: (newService: Omit<FuneralService, 'createdAt' | 'updatedAt' | 'history'>) => boolean;
   updateServiceStage: (serviceId: string, nextStage: ServiceStageKey, note?: string) => void;
   updateServiceDetails: (serviceId: string, updates: Partial<FuneralService>) => void;
   updateDocumentStatus: (serviceId: string, docId: string, status: 'aprobado' | 'en_revision' | 'pendiente') => void;
 
-  // Resources
+  // Resources (Filtered by activeCompany)
   rooms: Room[];
   updateRoomStatus: (roomId: string, status: Room['status']) => void;
   vehicles: Vehicle[];
@@ -72,14 +74,14 @@ interface AppContextType {
   staff: StaffMember[];
   providers: ExternalProvider[];
 
-  // Budgets & Payments
+  // Budgets & Payments (Filtered by activeCompany)
   budgets: Budget[];
   createBudget: (budget: Omit<Budget, 'createdAt' | 'updatedAt'>) => void;
   addPaymentToBudget: (budgetId: string, amount: number, method: 'efectivo' | 'tarjeta_debito' | 'tarjeta_credito' | 'transferencia_spei', reference: string) => void;
 
-  // Inventory
+  // Inventory (Filtered by activeCompany)
   inventory: InventoryItem[];
-  adjustInventoryStock: (itemId: string, delta: number) => void;
+  adjustInventoryStock: (itemId: string, delta: number, reason?: string) => boolean;
   addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
 
   // Family Portal
@@ -90,11 +92,13 @@ interface AppContextType {
   alerts: OperationalAlert[];
   dismissAlert: (alertId: string) => void;
 
-  // UI Modals
+  // UI Modals & Responsive State
   isNewServiceModalOpen: boolean;
   setIsNewServiceModalOpen: (open: boolean) => void;
   isAiModalOpen: boolean;
   setIsAiModalOpen: (open: boolean) => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
   viewingFamilyServiceCode: string | null;
   setViewingFamilyServiceCode: (code: string | null) => void;
   toastMessage: string | null;
@@ -107,25 +111,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentView, setCurrentView] = useState<MainViewKey>('dashboard');
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [activeCompanyId, setActiveCompanyIdState] = useState<string>('comp-santa-maria');
-  const [branches] = useState<Branch[]>(INITIAL_BRANCHES);
+  const [allBranchesState] = useState<Branch[]>(INITIAL_BRANCHES);
   const [activeBranchId, setActiveBranchId] = useState<string>('todas');
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
 
-  const [services, setServices] = useState<FuneralService[]>(INITIAL_SERVICES);
+  // Master lists
+  const [allServices, setAllServices] = useState<FuneralService[]>(INITIAL_SERVICES);
   const [selectedService, setSelectedService] = useState<FuneralService | null>(null);
 
-  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
-  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
-  const [staff] = useState<StaffMember[]>(INITIAL_STAFF);
-  const [providers] = useState<ExternalProvider[]>(INITIAL_PROVIDERS);
+  const [allRooms, setAllRooms] = useState<Room[]>(INITIAL_ROOMS);
+  const [allVehicles, setAllVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [allStaff] = useState<StaffMember[]>(INITIAL_STAFF);
+  const [allProviders] = useState<ExternalProvider[]>(INITIAL_PROVIDERS);
 
-  const [budgets, setBudgets] = useState<Budget[]>(INITIAL_BUDGETS);
-  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [allBudgets, setAllBudgets] = useState<Budget[]>(INITIAL_BUDGETS);
+  const [allInventory, setAllInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [condolences, setCondolences] = useState<FamilyCondolence[]>(INITIAL_CONDOLENCES);
-  const [alerts, setAlerts] = useState<OperationalAlert[]>(INITIAL_ALERTS);
+  const [allAlerts, setAllAlerts] = useState<OperationalAlert[]>(INITIAL_ALERTS);
 
   const [isNewServiceModalOpen, setIsNewServiceModalOpen] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewingFamilyServiceCode, setViewingFamilyServiceCode] = useState<string | null>('VAL-7890');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -144,6 +150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setActiveCompanyId = (id: string) => {
     setActiveCompanyIdState(id);
+    setActiveBranchId('todas'); // reset branch filter on company change
     const targetComp = companies.find((c) => c.id === id);
     if (targetComp) {
       showToast(`Empresa activa: ${targetComp.name}`);
@@ -175,10 +182,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Rol conmutado a: ${role.replace('_', ' ').toUpperCase()}`);
   };
 
-  const createService = (newServiceData: Omit<FuneralService, 'createdAt' | 'updatedAt' | 'history'>) => {
+  // Strictly Filtered Lists by Active Company (Multi-tenant isolation)
+  const branches = useMemo(() => {
+    return allBranchesState.filter((b) => b.companyId === activeCompanyId);
+  }, [allBranchesState, activeCompanyId]);
+
+  const services = useMemo(() => {
+    return allServices.filter((s) => s.companyId === activeCompanyId);
+  }, [allServices, activeCompanyId]);
+
+  const rooms = useMemo(() => {
+    return allRooms.filter((r) => r.companyId === activeCompanyId);
+  }, [allRooms, activeCompanyId]);
+
+  const vehicles = useMemo(() => {
+    return allVehicles.filter((v) => v.companyId === activeCompanyId);
+  }, [allVehicles, activeCompanyId]);
+
+  const staff = useMemo(() => {
+    return allStaff.filter((st) => st.companyId === activeCompanyId);
+  }, [allStaff, activeCompanyId]);
+
+  const providers = useMemo(() => {
+    return allProviders.filter((p) => p.companyId === activeCompanyId);
+  }, [allProviders, activeCompanyId]);
+
+  const budgets = useMemo(() => {
+    return allBudgets.filter((b) => b.companyId === activeCompanyId);
+  }, [allBudgets, activeCompanyId]);
+
+  const inventory = useMemo(() => {
+    return allInventory.filter((i) => i.companyId === activeCompanyId);
+  }, [allInventory, activeCompanyId]);
+
+  const alerts = useMemo(() => {
+    // Show alerts related to active company's services
+    const compServiceIds = new Set(services.map((s) => s.id));
+    return allAlerts.filter((a) => !a.relatedServiceId || compServiceIds.has(a.relatedServiceId));
+  }, [allAlerts, services]);
+
+  // Keep selectedService in sync with updated services list
+  useEffect(() => {
+    if (selectedService) {
+      const refreshed = allServices.find((s) => s.id === selectedService.id);
+      if (refreshed) {
+        setSelectedService(refreshed);
+      }
+    }
+  }, [allServices]);
+
+  const createService = (newServiceData: Omit<FuneralService, 'createdAt' | 'updatedAt' | 'history'>): boolean => {
     const nowIso = new Date().toISOString();
+
+    // Check collision for room: is room already occupied?
+    if (newServiceData.roomId) {
+      const room = allRooms.find((r) => r.id === newServiceData.roomId);
+      if (room && room.status === 'ocupada' && room.currentServiceId) {
+        showToast(`Advertencia: La sala ${room.name} ya está ocupada por otro servicio.`);
+      }
+    }
+
+    // Check collision for vehicle
+    if (newServiceData.vehicleId) {
+      const veh = allVehicles.find((v) => v.id === newServiceData.vehicleId);
+      if (veh && veh.status === 'en_servicio' && veh.currentServiceId) {
+        showToast(`Advertencia: El vehículo ${veh.model} ya está asignado a otro cortejo.`);
+      }
+    }
+
     const newService: FuneralService = {
       ...newServiceData,
+      companyId: activeCompanyId,
       createdAt: nowIso,
       updatedAt: nowIso,
       history: [
@@ -193,11 +267,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ],
     };
 
-    setServices((prev) => [newService, ...prev]);
+    setAllServices((prev) => [newService, ...prev]);
 
-    // If room assigned, mark it as reserved or occupied
+    // Mark room occupied
     if (newService.roomId) {
-      setRooms((prev) =>
+      setAllRooms((prev) =>
         prev.map((r) =>
           r.id === newService.roomId
             ? {
@@ -211,9 +285,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
-    // If vehicle assigned, mark it
+    // Mark vehicle in service
     if (newService.vehicleId) {
-      setVehicles((prev) =>
+      setAllVehicles((prev) =>
         prev.map((v) =>
           v.id === newService.vehicleId
             ? {
@@ -228,11 +302,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     showToast(`Expediente ${newService.id} creado con éxito.`);
+    return true;
   };
 
   const updateServiceStage = (serviceId: string, nextStage: ServiceStageKey, note?: string) => {
     const nowIso = new Date().toISOString();
-    setServices((prev) =>
+    setAllServices((prev) =>
       prev.map((s) => {
         if (s.id !== serviceId) return s;
         const newHistoryItem = {
@@ -254,14 +329,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // If finalized, liberate resources
     if (nextStage === 'finalizado') {
-      setRooms((prev) =>
+      setAllRooms((prev) =>
         prev.map((r) =>
           r.currentServiceId === serviceId
             ? { ...r, status: 'disponible', currentServiceId: undefined, currentServiceDeceasedName: undefined }
             : r
         )
       );
-      setVehicles((prev) =>
+      setAllVehicles((prev) =>
         prev.map((v) =>
           v.currentServiceId === serviceId
             ? { ...v, status: 'disponible', currentServiceId: undefined, currentDestination: undefined }
@@ -274,10 +349,91 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateServiceDetails = (serviceId: string, updates: Partial<FuneralService>) => {
-    setServices((prev) =>
-      prev.map((s) => (s.id === serviceId ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s))
+    const nowIso = new Date().toISOString();
+    const existing = allServices.find((s) => s.id === serviceId);
+
+    if (existing) {
+      // Check room reassignment
+      if (updates.roomId !== undefined && updates.roomId !== existing.roomId) {
+        // Free old room
+        if (existing.roomId) {
+          setAllRooms((prev) =>
+            prev.map((r) =>
+              r.id === existing.roomId
+                ? { ...r, status: 'disponible', currentServiceId: undefined, currentServiceDeceasedName: undefined }
+                : r
+            )
+          );
+        }
+        // Occupy new room
+        if (updates.roomId) {
+          setAllRooms((prev) =>
+            prev.map((r) =>
+              r.id === updates.roomId
+                ? {
+                    ...r,
+                    status: 'ocupada',
+                    currentServiceId: serviceId,
+                    currentServiceDeceasedName: updates.deceased?.fullName || existing.deceased.fullName,
+                  }
+                : r
+            )
+          );
+        }
+      }
+
+      // Check vehicle reassignment
+      if (updates.vehicleId !== undefined && updates.vehicleId !== existing.vehicleId) {
+        // Free old vehicle
+        if (existing.vehicleId) {
+          setAllVehicles((prev) =>
+            prev.map((v) =>
+              v.id === existing.vehicleId
+                ? { ...v, status: 'disponible', currentServiceId: undefined, currentDestination: undefined }
+                : v
+            )
+          );
+        }
+        // Occupy new vehicle
+        if (updates.vehicleId) {
+          setAllVehicles((prev) =>
+            prev.map((v) =>
+              v.id === updates.vehicleId
+                ? {
+                    ...v,
+                    status: 'en_servicio',
+                    currentServiceId: serviceId,
+                    currentDestination: updates.destinationPlace || existing.destinationPlace,
+                  }
+                : v
+            )
+          );
+        }
+      }
+    }
+
+    const editLogItem = {
+      id: `h-${Date.now()}`,
+      stage: existing?.currentStage || 'nuevo',
+      timestamp: nowIso,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      note: 'Modificación de datos generales del expediente.',
+    };
+
+    setAllServices((prev) =>
+      prev.map((s) => {
+        if (s.id !== serviceId) return s;
+        return {
+          ...s,
+          ...updates,
+          updatedAt: nowIso,
+          history: [...s.history, editLogItem],
+        };
+      })
     );
-    showToast(`Expediente ${serviceId} actualizado.`);
+
+    showToast(`Expediente ${serviceId} actualizado correctamente.`);
   };
 
   const updateDocumentStatus = (
@@ -285,7 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     docId: string,
     status: 'aprobado' | 'en_revision' | 'pendiente'
   ) => {
-    setServices((prev) =>
+    setAllServices((prev) =>
       prev.map((s) => {
         if (s.id !== serviceId) return s;
         const updatedDocs = s.documents.map((d) =>
@@ -298,12 +454,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRoomStatus = (roomId: string, status: Room['status']) => {
-    setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, status } : r)));
+    setAllRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, status } : r)));
     showToast(`Estatus de sala actualizado.`);
   };
 
   const updateVehicleStatus = (vehicleId: string, status: Vehicle['status']) => {
-    setVehicles((prev) => prev.map((v) => (v.id === vehicleId ? { ...v, status } : v)));
+    setAllVehicles((prev) => prev.map((v) => (v.id === vehicleId ? { ...v, status } : v)));
     showToast(`Estatus de vehículo actualizado.`);
   };
 
@@ -311,14 +467,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nowIso = new Date().toISOString();
     const newBudget: Budget = {
       ...newBudgetData,
+      companyId: activeCompanyId,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
-    setBudgets((prev) => [newBudget, ...prev]);
+    setAllBudgets((prev) => [newBudget, ...prev]);
 
-    // Also link back to service if matching
+    // Link back to service
     if (newBudget.serviceId) {
-      setServices((prev) =>
+      setAllServices((prev) =>
         prev.map((s) =>
           s.id === newBudget.serviceId
             ? { ...s, budgetId: newBudget.id, budgetTotalMxn: newBudget.totalMxn }
@@ -338,7 +495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nowIso = new Date().toISOString();
     const receiptFolio = `REC-2026-${Math.floor(100 + Math.random() * 900)}`;
 
-    setBudgets((prev) =>
+    setAllBudgets((prev) =>
       prev.map((b) => {
         if (b.id !== budgetId) return b;
         const newPayment = {
@@ -354,8 +511,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amountMxn, 0);
         const newStatus = totalPaid >= b.totalMxn ? 'liquidado' : 'aprobado_familia';
 
-        // Also update matching service paid amount
-        setServices((sPrev) =>
+        // Update matching service paid amount
+        setAllServices((sPrev) =>
           sPrev.map((s) =>
             s.id === b.serviceId ? { ...s, budgetPaidMxn: totalPaid } : s
           )
@@ -373,11 +530,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Pago de $${amount.toLocaleString('es-MX')} MXN registrado con folio ${receiptFolio}.`);
   };
 
-  const adjustInventoryStock = (itemId: string, delta: number) => {
-    setInventory((prev) =>
+  const adjustInventoryStock = (itemId: string, delta: number, reason?: string): boolean => {
+    const target = allInventory.find((i) => i.id === itemId);
+    if (!target) return false;
+
+    if (target.stockCurrent + delta < 0) {
+      showToast(`Error: No es posible tener existencias negativas para "${target.name}".`);
+      return false;
+    }
+
+    setAllInventory((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
-        const nextStock = Math.max(0, item.stockCurrent + delta);
+        const nextStock = item.stockCurrent + delta;
         const status =
           nextStock === 0
             ? 'agotado'
@@ -391,15 +556,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
-    showToast(`Stock de producto actualizado.`);
+
+    const actionText = delta > 0 ? `Entrada de +${delta}` : `Salida de ${delta}`;
+    showToast(`${actionText} registrada para ${target.name}${reason ? ` (${reason})` : ''}.`);
+    return true;
   };
 
   const addInventoryItem = (itemData: Omit<InventoryItem, 'id'>) => {
     const newItem: InventoryItem = {
       ...itemData,
       id: `inv-${Date.now()}`,
+      companyId: activeCompanyId,
     };
-    setInventory((prev) => [...prev, newItem]);
+    setAllInventory((prev) => [...prev, newItem]);
     showToast(`Producto ${newItem.name} agregado al inventario.`);
   };
 
@@ -417,7 +586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       relationship,
       message,
       timestamp: new Date().toISOString(),
-      approved: true, // auto-moderado en demo
+      approved: true,
       virtualCandleLit: candle,
     };
     setCondolences((prev) => [newCondolence, ...prev]);
@@ -425,7 +594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const dismissAlert = (alertId: string) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    setAllAlerts((prev) => prev.filter((a) => a.id !== alertId));
     showToast('Alerta operativa resuelta.');
   };
 
@@ -441,9 +610,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         companies,
         updateCompanyStatus,
         branches,
+        allBranches: allBranchesState,
         activeBranchId,
         setActiveBranchId,
         services,
+        allServices,
         selectedService,
         setSelectedService,
         createService,
@@ -470,6 +641,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsNewServiceModalOpen,
         isAiModalOpen,
         setIsAiModalOpen,
+        isMobileMenuOpen,
+        setIsMobileMenuOpen,
         viewingFamilyServiceCode,
         setViewingFamilyServiceCode,
         toastMessage,

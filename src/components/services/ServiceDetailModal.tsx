@@ -35,10 +35,60 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
     setViewingFamilyServiceCode,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'etapas' | 'documentos' | 'recursos' | 'historial'>('etapas');
+  const [activeTab, setActiveTab] = useState<'etapas' | 'documentos' | 'recursos' | 'historial' | 'editar'>('etapas');
   const [transitionStage, setTransitionStage] = useState<ServiceStageKey | null>(null);
   const [transitionNote, setTransitionNote] = useState('');
   const [isPrintMode, setIsPrintMode] = useState(false);
+  const { updateServiceDetails } = useApp();
+
+  // Edit states initialized from service
+  const [editFullName, setEditFullName] = useState(service.deceased.fullName);
+  const [editAge, setEditAge] = useState(service.deceased.age);
+  const [editDeathPlace, setEditDeathPlace] = useState(service.deceased.deathPlace);
+  const [editCause, setEditCause] = useState(service.deceased.causeOfDeath || '');
+  const [editFamilyName, setEditFamilyName] = useState(service.familyContact.fullName);
+  const [editRelationship, setEditRelationship] = useState(service.familyContact.relationship);
+  const [editPhone, setEditPhone] = useState(service.familyContact.phone);
+  const [editEmail, setEditEmail] = useState(service.familyContact.email || '');
+  const [editRoomId, setEditRoomId] = useState(service.roomId || '');
+  const [editVehicleId, setEditVehicleId] = useState(service.vehicleId || '');
+  const [editDirectorId, setEditDirectorId] = useState(service.directorStaffId);
+  const [editDate, setEditDate] = useState(service.scheduledServiceDate);
+  const [editWakeStart, setEditWakeStart] = useState(service.wakeStartTime || '09:00');
+  const [editWakeEnd, setEditWakeEnd] = useState(service.wakeEndTime || '18:30');
+  const [editCeremonyTime, setEditCeremonyTime] = useState(service.ceremonyTime || '');
+  const [editDestination, setEditDestination] = useState(service.destinationPlace);
+  const [editNotes, setEditNotes] = useState(service.internalNotes || '');
+
+  const handleSaveEdits = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateServiceDetails(service.id, {
+      deceased: {
+        ...service.deceased,
+        fullName: editFullName,
+        age: Number(editAge),
+        deathPlace: editDeathPlace,
+        causeOfDeath: editCause,
+      },
+      familyContact: {
+        ...service.familyContact,
+        fullName: editFamilyName,
+        relationship: editRelationship,
+        phone: editPhone,
+        email: editEmail,
+      },
+      roomId: editRoomId || undefined,
+      vehicleId: editVehicleId || undefined,
+      directorStaffId: editDirectorId,
+      scheduledServiceDate: editDate,
+      wakeStartTime: editWakeStart,
+      wakeEndTime: editWakeEnd,
+      ceremonyTime: editCeremonyTime,
+      destinationPlace: editDestination,
+      internalNotes: editNotes,
+    });
+    setActiveTab('etapas');
+  };
 
   const assignedRoom = rooms.find((r) => r.id === service.roomId);
   const assignedVehicle = vehicles.find((v) => v.id === service.vehicleId);
@@ -90,6 +140,13 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
 
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setActiveTab('editar')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
+              title="Editar datos del expediente"
+            >
+              <span>Editar Datos</span>
+            </button>
+            <button
               onClick={() => window.print()}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
               title="Imprimir ficha de servicio"
@@ -115,10 +172,10 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
         </div>
 
         {/* Pestañas de navegación interna */}
-        <div className="flex items-center gap-2 px-6 border-b border-slate-200 bg-slate-50 text-xs font-medium">
+        <div className="flex items-center gap-2 px-6 border-b border-slate-200 bg-slate-50 text-xs font-medium overflow-x-auto">
           <button
             onClick={() => setActiveTab('etapas')}
-            className={`py-3 px-2 border-b-2 transition-colors ${
+            className={`py-3 px-2 border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'etapas'
                 ? 'border-amber-600 text-amber-900 font-semibold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -128,7 +185,7 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
           </button>
           <button
             onClick={() => setActiveTab('documentos')}
-            className={`py-3 px-2 border-b-2 transition-colors ${
+            className={`py-3 px-2 border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'documentos'
                 ? 'border-amber-600 text-amber-900 font-semibold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -138,7 +195,7 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
           </button>
           <button
             onClick={() => setActiveTab('recursos')}
-            className={`py-3 px-2 border-b-2 transition-colors ${
+            className={`py-3 px-2 border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'recursos'
                 ? 'border-amber-600 text-amber-900 font-semibold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -148,13 +205,23 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
           </button>
           <button
             onClick={() => setActiveTab('historial')}
-            className={`py-3 px-2 border-b-2 transition-colors ${
+            className={`py-3 px-2 border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'historial'
                 ? 'border-amber-600 text-amber-900 font-semibold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             Trazabilidad y Auditoría ({service.history.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('editar')}
+            className={`py-3 px-2 border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === 'editar'
+                ? 'border-amber-600 text-amber-900 font-semibold'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Editar Expediente
           </button>
         </div>
 
@@ -422,6 +489,217 @@ export const ServiceDetailModal: React.FC<Props> = ({ service, onClose }) => {
                 ))}
               </div>
             </div>
+          )}
+
+          {activeTab === 'editar' && (
+            <form onSubmit={handleSaveEdits} className="space-y-4 text-xs text-slate-800">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-950">
+                <span className="font-bold block mb-0.5">Modificación de Datos de Expediente</span>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Cualquier actualización en los datos del fallecido, familiar responsable o reasignación de capilla y carroza quedará registrada en la bitácora de auditoría y liberará los recursos previos.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-bold text-slate-900 border-b pb-1">Persona Fallecida</h4>
+                  <div>
+                    <label className="block text-slate-600 font-medium mb-1">Nombre Completo *</label>
+                    <input
+                      type="text"
+                      value={editFullName}
+                      onChange={(e) => setEditFullName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:border-amber-500"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-600 font-medium mb-1">Edad</label>
+                      <input
+                        type="number"
+                        value={editAge}
+                        onChange={(e) => setEditAge(Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 font-medium mb-1">Causa de Muerte</label>
+                      <input
+                        type="text"
+                        value={editCause}
+                        onChange={(e) => setEditCause(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-medium mb-1">Lugar de Defunción</label>
+                    <input
+                      type="text"
+                      value={editDeathPlace}
+                      onChange={(e) => setEditDeathPlace(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-bold text-slate-900 border-b pb-1">Familiar Responsable</h4>
+                  <div>
+                    <label className="block text-slate-600 font-medium mb-1">Nombre Familiar *</label>
+                    <input
+                      type="text"
+                      value={editFamilyName}
+                      onChange={(e) => setEditFamilyName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:border-amber-500"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-600 font-medium mb-1">Parentesco</label>
+                      <input
+                        type="text"
+                        value={editRelationship}
+                        onChange={(e) => setEditRelationship(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 font-medium mb-1">Teléfono</label>
+                      <input
+                        type="text"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-medium mb-1">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Capilla de Velación</label>
+                  <select
+                    value={editRoomId}
+                    onChange={(e) => setEditRoomId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="">Sin capilla asignada</option>
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Vehículo / Carroza</label>
+                  <select
+                    value={editVehicleId}
+                    onChange={(e) => setEditVehicleId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="">Sin vehículo asignado</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.model} ({v.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Director Coordinador</label>
+                  <select
+                    value={editDirectorId}
+                    onChange={(e) => setEditDirectorId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                  >
+                    {staff.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Fecha Programada</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Horario de Capilla</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      value={editWakeStart}
+                      onChange={(e) => setEditWakeStart(e.target.value)}
+                      className="w-1/2 px-2 py-1.5 border border-slate-300 rounded"
+                    />
+                    <span>a</span>
+                    <input
+                      type="time"
+                      value={editWakeEnd}
+                      onChange={(e) => setEditWakeEnd(e.target.value)}
+                      className="w-1/2 px-2 py-1.5 border border-slate-300 rounded"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Destino Final (Panteón/Horno)</label>
+                  <input
+                    type="text"
+                    value={editDestination}
+                    onChange={(e) => setEditDestination(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Observaciones Internas</label>
+                <textarea
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('etapas')}
+                  className="px-3.5 py-2 text-slate-600 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg shadow-sm"
+                >
+                  Guardar Modificaciones
+                </button>
+              </div>
+            </form>
           )}
         </div>
       </div>
