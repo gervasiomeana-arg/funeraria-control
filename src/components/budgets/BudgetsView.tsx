@@ -36,6 +36,8 @@ export const BudgetsView: React.FC = () => {
   const [newDeceasedName, setNewDeceasedName] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState(services[0]?.id || '');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
+  // Tasa editable por presupuesto; no se presume que todos los conceptos estén gravados igual.
+  const [ivaRate, setIvaRate] = useState<number>(16);
   const [discountReason, setDiscountReason] = useState('');
   const [budgetError, setBudgetError] = useState('');
 
@@ -57,8 +59,7 @@ export const BudgetsView: React.FC = () => {
   const calculateSubtotal = () => newItems.reduce((acc, it) => acc + it.totalMxn, 0);
   const calculateTotal = () => {
     const sub = calculateSubtotal() - discountAmount;
-    const iva = sub * 0.16;
-    return sub + iva;
+    return sub * (1 + ivaRate / 100);
   };
 
   const handleSaveBudget = () => {
@@ -66,11 +67,12 @@ export const BudgetsView: React.FC = () => {
     if (!services.some(service => service.id === selectedServiceId)) { setBudgetError('Seleccioná un expediente válido.'); return; }
     if (newItems.length === 0 || newItems.some(item => !item.description.trim() || !Number.isFinite(item.unitPriceMxn) || item.unitPriceMxn < 0 || !Number.isFinite(item.quantity) || item.quantity <= 0)) { setBudgetError('Cada concepto debe tener descripción, precio válido y cantidad mayor que cero.'); return; }
     if (discountAmount < 0 || !Number.isFinite(discountAmount) || discountAmount > calculateSubtotal()) { setBudgetError('El descuento no puede ser negativo ni superar el subtotal.'); return; }
+    if (!Number.isFinite(ivaRate) || ivaRate < 0 || ivaRate > 100) { setBudgetError('Ingresá una tasa de IVA válida entre 0 y 100%.'); return; }
     if (discountAmount > 0 && !discountReason.trim()) { setBudgetError('Indicá el motivo del descuento.'); return; }
     setBudgetError('');
 
     const sub = calculateSubtotal();
-    const iva = (sub - discountAmount) * 0.16;
+    const iva = (sub - discountAmount) * (ivaRate / 100);
     const total = sub - discountAmount + iva;
 
     createBudget({
@@ -97,8 +99,14 @@ export const BudgetsView: React.FC = () => {
 
   const handleRegisterPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBudget || paymentAmount <= 0) return;
-
+    if (!selectedBudget) return;
+    const paid = selectedBudget.payments.reduce((sum, payment) => sum + payment.amountMxn, 0);
+    const outstanding = Math.max(0, selectedBudget.totalMxn - paid);
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || paymentAmount > outstanding) {
+      setBudgetError('El abono debe ser mayor que cero y no puede superar el saldo pendiente.');
+      return;
+    }
+    setBudgetError('');
     addPaymentToBudget(selectedBudget.id, paymentAmount, paymentMethod, paymentRef);
     setIsPaymentModalOpen(false);
   };
@@ -122,7 +130,7 @@ export const BudgetsView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsNewBudgetModalOpen(true)}
+          onClick={() => { setBudgetError(''); setIsNewBudgetModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm whitespace-nowrap self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -249,7 +257,7 @@ export const BudgetsView: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setIsPaymentModalOpen(true)}
+                      onClick={() => { setBudgetError(''); setIsPaymentModalOpen(true); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-colors"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
@@ -616,6 +624,12 @@ export const BudgetsView: React.FC = () => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block text-slate-600 font-medium">IVA aplicable a esta cotización (%)
+                  <input type="number" min="0" max="100" step="0.01" value={ivaRate} onChange={e => setIvaRate(Number(e.target.value))} className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+                </label>
+                <p className="self-end text-[11px] leading-5 text-slate-600">Tasa inicial ilustrativa de 16%. Confirmá el tratamiento fiscal de cada servicio con asesoría contable antes de emitir una cotización real.</p>
+              </div>
               <div className="p-3 bg-amber-50 rounded-lg text-right font-mono font-bold text-slate-900 text-sm">
                 Total Calculado: ${calculateTotal().toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
               </div>
