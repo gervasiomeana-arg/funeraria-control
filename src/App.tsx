@@ -32,6 +32,7 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   const [accessToken, setAccessToken] = useState('');
+  const [authenticatedUserId, setAuthenticatedUserId] = useState('');
   const [realServices, setRealServices] = useState<Array<{id:string;reference:string;status:string;deceased_name:string|null}>>([]);
   const [realReference, setRealReference] = useState('');
   const [realDeceasedName, setRealDeceasedName] = useState('');
@@ -48,13 +49,13 @@ const SupabaseConnectionPanel: React.FC = () => {
   };
   const saveRealService = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!accessToken || !realCompanyId) { setMessage('Iniciá sesión con una funeraria autorizada.'); return; }
+    if (!accessToken || !realCompanyId || !authenticatedUserId) { setMessage('Iniciá sesión con una funeraria autorizada.'); return; }
     setRealDataBusy(true);
     try {
       const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services', {
         method: 'POST',
         headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type':'application/json', Prefer:'return=minimal'},
-        body: JSON.stringify({company_id:realCompanyId,reference:realReference.trim(),deceased_name:realDeceasedName.trim(),status:'nuevo'})
+        body: JSON.stringify({company_id:realCompanyId,reference:realReference.trim(),deceased_name:realDeceasedName.trim(),status:'nuevo',created_by:authenticatedUserId})
       });
       if (!response.ok) {
         const details = await response.json().catch(() => ({}));
@@ -151,6 +152,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       setAuthorizedCompanies(memberships.map((membership: {company_id:string;role:string}) => membership.company_id + ' (' + membership.role + ')'));
       setSignedIn(true);
       setAccessToken(data.access_token);
+      setAuthenticatedUserId(identity.id);
       setRealCompanyId(memberships[0].company_id);
       try { await loadRealServices(data.access_token,memberships[0].company_id); }
       catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar expedientes.'); }
@@ -159,6 +161,7 @@ const SupabaseConnectionPanel: React.FC = () => {
     } catch (error) {
       setSignedIn(false);
       setAccessToken('');
+      setAuthenticatedUserId('');
       setRealCompanyId('');
       setRealServices([]);
       setAuthorizedCompanies([]);
@@ -196,7 +199,7 @@ const SupabaseConnectionPanel: React.FC = () => {
         <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>
       </section>}
-      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setRealCompanyId('');setRealServices([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
     </div>}
   </div>;
