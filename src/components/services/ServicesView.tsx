@@ -51,6 +51,11 @@ export const ServicesView: React.FC = () => {
     return true;
   });
 
+  const activeCount = services.filter(service => (activeBranchId === 'todas' || service.branchId === activeBranchId) && service.currentStage !== 'finalizado').length;
+  const finishedCount = services.filter(service => (activeBranchId === 'todas' || service.branchId === activeBranchId) && service.currentStage === 'finalizado').length;
+  const hasFilters = Boolean(searchQuery.trim()) || stageFilter !== 'todos' || typeFilter !== 'todos';
+  const resetFilters = () => { setSearchQuery(''); setStageFilter('todos'); setTypeFilter('todos'); };
+
   const getStageBadge = (stage: ServiceStageKey) => {
     switch (stage) {
       case 'nuevo':
@@ -116,6 +121,13 @@ export const ServicesView: React.FC = () => {
         </button>
       </div>
 
+      {/* Resumen operativo: refleja los expedientes visibles de la sucursal elegida. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3" aria-label="Resumen de expedientes">
+        <div className="rounded-xl border border-[#e5dfd3] bg-white p-4"><p className="text-xs text-slate-500">Expedientes activos</p><p className="mt-1 text-2xl font-semibold text-[#15383b]">{activeCount}</p></div>
+        <div className="rounded-xl border border-[#e5dfd3] bg-white p-4"><p className="text-xs text-slate-500">Finalizados</p><p className="mt-1 text-2xl font-semibold text-[#15383b]">{finishedCount}</p></div>
+        <div className="col-span-2 rounded-xl border border-[#e5dfd3] bg-white p-4 md:col-span-1"><p className="text-xs text-slate-500">Resultados de búsqueda</p><p className="mt-1 text-2xl font-semibold text-[#15383b]">{filteredServices.length}</p></div>
+      </div>
+
       {/* Barra de Filtros y Búsqueda */}
       <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
         <div className="relative flex-1">
@@ -165,6 +177,11 @@ export const ServicesView: React.FC = () => {
             </select>
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500" aria-live="polite">
+        <span>Mostrando {filteredServices.length} expediente{filteredServices.length === 1 ? '' : 's'}{hasFilters ? ' con los filtros seleccionados' : ''}.</span>
+        {hasFilters && <button type="button" onClick={resetFilters} className="rounded-lg border border-[#d6cbb6] bg-white px-3 py-2 font-semibold text-[#15383b] hover:bg-[#f7f2e8]">Limpiar filtros</button>}
       </div>
 
       {/* Lista de Expedientes */}
