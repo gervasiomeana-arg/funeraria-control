@@ -31,6 +31,42 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [recoveryToken, setRecoveryToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
+  const [accessToken, setAccessToken] = useState('');
+  const [realServices, setRealServices] = useState<Array<{id:string;reference:string;status:string;deceased_name:string|null}>>([]);
+  const [realReference, setRealReference] = useState('');
+  const [realDeceasedName, setRealDeceasedName] = useState('');
+  const [realCompanyId, setRealCompanyId] = useState('');
+  const [realDataBusy, setRealDataBusy] = useState(false);
+  const loadRealServices = async (token: string, companyId: string) => {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services?select=id,reference,status,deceased_name&company_id=eq.' + encodeURIComponent(companyId) + '&order=created_at.desc&limit=20', {
+      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
+    });
+    if (!response.ok) throw new Error('No se pudieron consultar los expedientes reales (HTTP ' + response.status + ').');
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de expedientes.');
+    setRealServices(rows);
+  };
+  const saveRealService = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !realCompanyId) { setMessage('Iniciá sesión con una funeraria autorizada.'); return; }
+    setRealDataBusy(true);
+    try {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services', {
+        method: 'POST',
+        headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type':'application/json', Prefer:'return=minimal'},
+        body: JSON.stringify({company_id:realCompanyId,reference:realReference.trim(),deceased_name:realDeceasedName.trim(),status:'nuevo'})
+      });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error('No se pudo guardar (HTTP ' + response.status + '): ' + (details.message || 'Revisá permisos y campos requeridos.'));
+      }
+      setRealReference('');
+      setRealDeceasedName('');
+      await loadRealServices(accessToken,realCompanyId);
+      setMessage('Expediente real guardado y recuperado de Supabase.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar.'); }
+    finally { setRealDataBusy(false); }
+  };
   useEffect(() => {
     // Supabase recovery redirects carry a short-lived token in the URL fragment.
     const params = new URLSearchParams(window.location.hash.slice(1));
@@ -114,10 +150,17 @@ const SupabaseConnectionPanel: React.FC = () => {
       }
       setAuthorizedCompanies(memberships.map((membership: {company_id:string;role:string}) => membership.company_id + ' (' + membership.role + ')'));
       setSignedIn(true);
+      setAccessToken(data.access_token);
+      setRealCompanyId(memberships[0].company_id);
+      try { await loadRealServices(data.access_token,memberships[0].company_id); }
+      catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar expedientes.'); }
       setPassword('');
       setMessage('Identidad y membresía verificadas en Supabase. La operación continúa en modo demostración hasta activar persistencia real.');
     } catch (error) {
       setSignedIn(false);
+      setAccessToken('');
+      setRealCompanyId('');
+      setRealServices([]);
       setAuthorizedCompanies([]);
       setPassword('');
       setMessage(error instanceof Error ? error.message : 'Error de conexión.');
@@ -142,7 +185,18 @@ const SupabaseConnectionPanel: React.FC = () => {
       {!signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
-      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
+        <h3 className="font-semibold">Expedientes reales — Supabase</h3>
+        <p className="mt-1 text-[11px] text-slate-600">Área separada de los expedientes ficticios. Los registros nuevos se guardan en la base de datos de tu funeraria.</p>
+        <form onSubmit={saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1">Folio<input required maxLength={80} value={realReference} onChange={event=>setRealReference(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
+          <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
+          <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':'Guardar en Supabase'}</button>
+        </form>
+        <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
+        <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>
+      </section>}
+      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setRealCompanyId('');setRealServices([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
     </div>}
   </div>;
