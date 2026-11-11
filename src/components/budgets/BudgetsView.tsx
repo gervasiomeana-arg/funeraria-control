@@ -47,6 +47,13 @@ export const BudgetsView: React.FC = () => {
     { id: '4', category: 'preparacion', description: 'Tratamiento tanatológico y arreglo estético', unitPriceMxn: 5500, quantity: 1, totalMxn: 5500 },
   ]);
 
+  const updateItem = (id: string, field: 'description' | 'unitPriceMxn' | 'quantity', value: string) => {
+    setNewItems(items => items.map(item => {
+      if (item.id !== id) return item;
+      const next = { ...item, [field]: field === 'description' ? value : Number(value) };
+      return { ...next, totalMxn: next.unitPriceMxn * next.quantity };
+    }));
+  };
   const calculateSubtotal = () => newItems.reduce((acc, it) => acc + it.totalMxn, 0);
   const calculateTotal = () => {
     const sub = calculateSubtotal() - discountAmount;
@@ -57,6 +64,7 @@ export const BudgetsView: React.FC = () => {
   const handleSaveBudget = () => {
     if (!newClientName.trim() || !newDeceasedName.trim()) { setBudgetError('Completá los nombres del contratante y de la persona fallecida.'); return; }
     if (!services.some(service => service.id === selectedServiceId)) { setBudgetError('Seleccioná un expediente válido.'); return; }
+    if (newItems.length === 0 || newItems.some(item => !item.description.trim() || !Number.isFinite(item.unitPriceMxn) || item.unitPriceMxn < 0 || !Number.isFinite(item.quantity) || item.quantity <= 0)) { setBudgetError('Cada concepto debe tener descripción, precio válido y cantidad mayor que cero.'); return; }
     if (discountAmount < 0 || !Number.isFinite(discountAmount) || discountAmount > calculateSubtotal()) { setBudgetError('El descuento no puede ser negativo ni superar el subtotal.'); return; }
     if (discountAmount > 0 && !discountReason.trim()) { setBudgetError('Indicá el motivo del descuento.'); return; }
     setBudgetError('');
@@ -566,13 +574,24 @@ export const BudgetsView: React.FC = () => {
               </div>
 
               <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
-                <span className="font-semibold text-slate-800 block">Conceptos Incluidos (Paquete Tradicional):</span>
+                <span className="font-semibold text-slate-800 block">Catálogo de conceptos de esta cotización (editable):</span>
+                <p className="text-[11px] text-slate-500">Modificá descripción, cantidad y precio unitario de cada servicio. Los cambios se aplican a este presupuesto, no al catálogo general.</p>
                 {newItems.map((item) => (
-                  <div key={item.id} className="flex justify-between text-[11px] text-slate-700">
-                    <span className="truncate pr-2">{item.description}</span>
-                    <span className="font-mono font-medium">${item.totalMxn.toLocaleString('es-MX')}</span>
+                  <div key={item.id} className="grid grid-cols-12 gap-2 items-end rounded-lg border border-slate-200 bg-white p-2">
+                    <label className="col-span-12 sm:col-span-6 text-[10px] text-slate-600">Concepto
+                      <input aria-label="Descripción del concepto" value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)} className="mt-1 w-full rounded border border-slate-300 p-2 text-xs" />
+                    </label>
+                    <label className="col-span-4 sm:col-span-2 text-[10px] text-slate-600">Cantidad
+                      <input aria-label="Cantidad" type="number" min="1" step="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} className="mt-1 w-full rounded border border-slate-300 p-2 text-xs" />
+                    </label>
+                    <label className="col-span-5 sm:col-span-3 text-[10px] text-slate-600">Precio MXN
+                      <input aria-label="Precio unitario MXN" type="number" min="0" step="0.01" value={item.unitPriceMxn} onChange={e => updateItem(item.id, 'unitPriceMxn', e.target.value)} className="mt-1 w-full rounded border border-slate-300 p-2 text-xs" />
+                    </label>
+                    <button type="button" aria-label="Quitar concepto" onClick={() => setNewItems(items => items.filter(i => i.id !== item.id))} className="col-span-3 sm:col-span-1 rounded border border-red-200 p-2 text-red-700">×</button>
+                    <div className="col-span-12 text-right font-semibold text-[#15383b]">${item.totalMxn.toLocaleString('es-MX', {minimumFractionDigits:2})} MXN</div>
                   </div>
                 ))}
+                <button type="button" onClick={() => setNewItems(items => [...items, {id: 'item-'+Date.now(), category:'otros' as BudgetItem['category'], description:'Servicio adicional', unitPriceMxn:0, quantity:1, totalMxn:0}])} className="rounded-lg border border-[#c9b487] bg-white px-3 py-2 font-semibold text-[#15383b]">+ Agregar concepto individual</button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
