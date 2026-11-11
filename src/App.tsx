@@ -38,7 +38,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       setRecoveryToken(params.get('access_token') || '');
       setRecoveryMode(true);
       setOpen(true);
-      setMessage('Enlace verificado. Elegí una contraseña nueva para completar la activación.');
+      setMessage('Enlace de recuperación detectado. Supabase comprobará su validez al guardar la nueva contraseña.');
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, []);
@@ -92,18 +92,34 @@ const SupabaseConnectionPanel: React.FC = () => {
       });
       const data = await response.json();
       if (!response.ok || !data.access_token) throw new Error('No se pudo iniciar sesión. Verificá tus credenciales en Supabase.');
+      // Verify the access token with Supabase Auth before checking tenant membership.
+      const identityResponse = await fetch(SUPABASE_URL + '/auth/v1/user', {
+        headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + data.access_token }
+      });
+      if (!identityResponse.ok) throw new Error('No se pudo verificar la identidad con Supabase.');
+      const identity = await identityResponse.json();
+      if (!identity?.id) throw new Error('La identidad devuelta por Supabase no es válida.');
       const membershipsResponse = await fetch(SUPABASE_URL + '/rest/v1/company_memberships?select=company_id,role&active=eq.true', {
         headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + data.access_token }
       });
       if (!membershipsResponse.ok) throw new Error('Autenticación correcta, pero no se pudo verificar la membresía.');
-      const memberships = await membershipsResponse.json();
+      const memberships: Array<{company_id:string;role:string}> = await membershipsResponse.json();
+      if (!Array.isArray(memberships)) throw new Error('Respuesta de membresías no válida.');
+      if (memberships.length === 0) {
+        setSignedIn(false);
+        setAuthorizedCompanies([]);
+        setPassword('');
+        setMessage('Identidad verificada, pero no tenés una funeraria activa asignada. El acceso operativo sigue bloqueado.');
+        return;
+      }
       setAuthorizedCompanies(memberships.map((membership: {company_id:string;role:string}) => membership.company_id + ' (' + membership.role + ')'));
       setSignedIn(true);
       setPassword('');
-      setMessage(memberships.length ? 'Autenticación verificada. Acceso restringido por empresa.' : 'Autenticación correcta. Todavía no tenés una funeraria asignada; no se habilita el acceso a datos reales.');
+      setMessage('Identidad y membresía verificadas en Supabase. La operación continúa en modo demostración hasta activar persistencia real.');
     } catch (error) {
       setSignedIn(false);
       setAuthorizedCompanies([]);
+      setPassword('');
       setMessage(error instanceof Error ? error.message : 'Error de conexión.');
     } finally { setBusy(false); }
   };
@@ -126,7 +142,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       {!signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
-      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Sesión local cerrada.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
     </div>}
   </div>;
