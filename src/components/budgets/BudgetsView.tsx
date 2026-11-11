@@ -37,6 +37,7 @@ export const BudgetsView: React.FC = () => {
   const [selectedServiceId, setSelectedServiceId] = useState(services[0]?.id || '');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState('');
+  const [budgetError, setBudgetError] = useState('');
 
   // Items for new budget
   const [newItems, setNewItems] = useState<BudgetItem[]>([
@@ -54,7 +55,11 @@ export const BudgetsView: React.FC = () => {
   };
 
   const handleSaveBudget = () => {
-    if (!newClientName || !newDeceasedName) return;
+    if (!newClientName.trim() || !newDeceasedName.trim()) { setBudgetError('Completá los nombres del contratante y de la persona fallecida.'); return; }
+    if (!services.some(service => service.id === selectedServiceId)) { setBudgetError('Seleccioná un expediente válido.'); return; }
+    if (discountAmount < 0 || !Number.isFinite(discountAmount) || discountAmount > calculateSubtotal()) { setBudgetError('El descuento no puede ser negativo ni superar el subtotal.'); return; }
+    if (discountAmount > 0 && !discountReason.trim()) { setBudgetError('Indicá el motivo del descuento.'); return; }
+    setBudgetError('');
 
     const sub = calculateSubtotal();
     const iva = (sub - discountAmount) * 0.16;
@@ -76,7 +81,7 @@ export const BudgetsView: React.FC = () => {
       totalMxn: total,
       status: 'aprobado_familia',
       payments: [],
-      notes: 'Presupuesto emitido conforme a catálogo de precios 2026 en MXN.',
+      notes: 'COTIZACIÓN DE DEMOSTRACIÓN. Precios ilustrativos sujetos a verificación de catálogo, impuestos y condiciones. No constituye contrato ni comprobante fiscal.',
     });
 
     setIsNewBudgetModalOpen(false);
@@ -117,6 +122,11 @@ export const BudgetsView: React.FC = () => {
         </button>
       </div>
 
+      <section className="rounded-xl border border-[#d9c8a7] bg-[#fbf8f0] p-4 text-xs leading-5 text-[#554a38]">
+        <strong className="block text-sm text-[#15383b]">Información comercial y cumplimiento en México</strong>
+        <p className="mt-1">Referencia: NOM-036-SCFI-2016 y disposiciones de PROFECO aplicables. Los importes de esta demostración son ilustrativos, no tarifas oficiales ni precios máximos. Antes de cotizar realmente, verificá catálogo vigente, impuestos, conceptos incluidos y adicionales, cancelaciones y contrato de adhesión cuando corresponda.</p>
+        <p className="mt-1 font-medium">Un presupuesto no equivale a la aceptación del cliente ni sustituye el contrato o comprobante fiscal.</p>
+      </section>
       {/* Pestañas del Módulo */}
       <div className="flex items-center gap-2 border-b border-slate-200 text-xs font-medium">
         <button
@@ -478,6 +488,8 @@ export const BudgetsView: React.FC = () => {
                 />
               </div>
 
+              {budgetError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700">{budgetError}</p>}
+              <p className="text-[11px] leading-5 text-slate-600">Precios ilustrativos en MXN. Esta demostración calcula IVA del 16% como supuesto; verificá la tasa y el tratamiento fiscal aplicables antes de emitir cotizaciones reales.</p>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
