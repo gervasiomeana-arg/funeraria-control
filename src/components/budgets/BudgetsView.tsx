@@ -521,7 +521,7 @@ export const BudgetsView: React.FC = () => {
       {/* Modal Nuevo Presupuesto */}
       {isNewBudgetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-5 border border-slate-200 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-4xl p-4 sm:p-6 border border-slate-200 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-2">
               <h3 className="font-bold text-slate-900 text-sm">Nuevo Presupuesto Exequial</h3>
               <button onClick={() => setIsNewBudgetModalOpen(false)}><X className="w-4 h-4 text-slate-400" /></button>
@@ -550,7 +550,7 @@ export const BudgetsView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Nombre del Titular / Cliente *</label>
                   <input
@@ -620,6 +620,7 @@ export const BudgetsView: React.FC = () => {
                 Total Calculado: ${calculateTotal().toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
               </div>
 
+              {budgetError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{budgetError}</p>}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
