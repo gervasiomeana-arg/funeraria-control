@@ -30,6 +30,7 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [recoveryToken, setRecoveryToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   const [accessToken, setAccessToken] = useState('');
   const [authenticatedUserId, setAuthenticatedUserId] = useState('');
@@ -102,6 +103,7 @@ const SupabaseConnectionPanel: React.FC = () => {
   const saveNewPassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (newPassword.length < 12) { setMessage('Usá una contraseña de al menos 12 caracteres.'); return; }
+    if (newPassword !== confirmPassword) { setMessage('Las contraseñas no coinciden.'); return; }
     setBusy(true);
     try {
       const response = await fetch(SUPABASE_URL + '/auth/v1/user', {
@@ -112,6 +114,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       if (!response.ok) throw new Error('El enlace expiró o no es válido. Solicitá uno nuevo.');
       setRecoveryToken('');
       setNewPassword('');
+      setConfirmPassword('');
       setRecoveryMode(false);
       setMessage('Contraseña establecida correctamente. Ya podés iniciar sesión.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar la contraseña.'); }
@@ -169,6 +172,20 @@ const SupabaseConnectionPanel: React.FC = () => {
       setMessage(error instanceof Error ? error.message : 'Error de conexión.');
     } finally { setBusy(false); }
   };
+  if (recoveryMode && recoveryToken) return <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#102d34] p-4">
+    <section className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl md:p-10" aria-label="Crear contraseña">
+      <div className="mb-5 text-xs font-bold uppercase tracking-[.2em] text-[#b09058]">FUNERARIA CONTROL</div>
+      <h1 className="text-2xl font-semibold text-[#17353b]">Elegí tu contraseña</h1>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Este es el último paso. Creá una contraseña que puedas recordar y usá el mismo correo y contraseña desde tu computadora o celular.</p>
+      <form onSubmit={saveNewPassword} className="mt-6 space-y-4">
+        <label className="block text-sm font-medium text-[#17353b]">Nueva contraseña<input autoFocus required minLength={12} type="password" autoComplete="new-password" value={newPassword} onChange={event=>setNewPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 p-3"/></label>
+        <label className="block text-sm font-medium text-[#17353b]">Repetí la contraseña<input required minLength={12} type="password" autoComplete="new-password" value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 p-3"/></label>
+        <button disabled={busy} type="submit" className="w-full rounded-xl bg-[#173a3e] p-3 font-semibold text-white disabled:opacity-50">{busy?'Guardando…':'Guardar mi contraseña'}</button>
+      </form>
+      <p role="status" className="mt-4 text-sm text-[#31564e]">{message}</p>
+      <p className="mt-5 text-xs leading-5 text-slate-500">No compartas tu contraseña. Si el enlace caducó, solicitá uno nuevo desde Conectar cuenta.</p>
+    </section>
+  </div>;
   return <div className="border-b border-[#d9e4df] bg-[#eef4f0] px-4 py-2 text-xs text-[#31564e]">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
       <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Datos demo preservados</span>
