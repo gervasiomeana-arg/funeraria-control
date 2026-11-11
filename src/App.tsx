@@ -39,6 +39,17 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [realDeceasedName, setRealDeceasedName] = useState('');
   const [realCompanyId, setRealCompanyId] = useState('');
   const [realDataBusy, setRealDataBusy] = useState(false);
+  const [realBudgets, setRealBudgets] = useState<Array<{id:string;service_id:string;subtotal_mxn:number;discount_mxn:number;tax_mxn:number;status:string}>>([]);
+  const loadRealBudgets = async (token: string, companyId: string) => {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/budgets?select=id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status&company_id=eq.' + encodeURIComponent(companyId) + '&limit=30', {
+      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
+    });
+    if (!response.ok) throw new Error('No se pudieron consultar presupuestos reales (HTTP ' + response.status + ').');
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de presupuestos.');
+    setRealBudgets(rows);
+  };
+
   const loadRealServices = async (token: string, companyId: string) => {
     const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services?select=id,reference,status,deceased_name&company_id=eq.' + encodeURIComponent(companyId) + '&order=created_at.desc&limit=20', {
       headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
@@ -157,7 +168,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       setAccessToken(data.access_token);
       setAuthenticatedUserId(identity.id);
       setRealCompanyId(memberships[0].company_id);
-      try { await loadRealServices(data.access_token,memberships[0].company_id); }
+      try { await Promise.all([loadRealServices(data.access_token,memberships[0].company_id),loadRealBudgets(data.access_token,memberships[0].company_id)]); }
       catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar expedientes.'); }
       setPassword('');
       setMessage('Identidad y membresía verificadas en Supabase. La operación continúa en modo demostración hasta activar persistencia real.');
@@ -167,6 +178,7 @@ const SupabaseConnectionPanel: React.FC = () => {
       setAuthenticatedUserId('');
       setRealCompanyId('');
       setRealServices([]);
+      setRealBudgets([]);
       setAuthorizedCompanies([]);
       setPassword('');
       setMessage(error instanceof Error ? error.message : 'Error de conexión.');
@@ -213,6 +225,12 @@ const SupabaseConnectionPanel: React.FC = () => {
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':'Guardar en Supabase'}</button>
         </form>
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+          <h3 className="font-semibold">Presupuestos reales (solo lectura)</h3>
+          <p className="mt-1 text-slate-500">Registros de Supabase separados de los presupuestos de demostración.</p>
+          {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="rounded border border-slate-100 p-2">{b.status} · {b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</li>)}</ul>}
+          <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);loadRealBudgets(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
+        </div>
         <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>
       </section>}
