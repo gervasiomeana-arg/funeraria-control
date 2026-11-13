@@ -52,6 +52,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [paymentReferenceReal, setPaymentReferenceReal] = useState('');
   const [operationalModule, setOperationalModule] = useState<'agenda'|'familias'|'inventario'|'recursos'|'reportes'|'admin'>('agenda');
   const [operationalTitle, setOperationalTitle] = useState('');
+  const [editingOperationalId, setEditingOperationalId] = useState('');
   const [operationalDetails, setOperationalDetails] = useState('');
   const [operationalRecords, setOperationalRecords] = useState<Array<{id:string;module:string;title:string;details:Record<string,unknown>;created_at:string}>>([]);
   const loadOperationalRecords = async (token:string, companyId:string) => {
@@ -61,14 +62,30 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     if (!Array.isArray(rows)) throw new Error('Respuesta inválida de módulos.');
     setOperationalRecords(rows);
   };
+  const patchReal = async (table:string,id:string,payload:Record<string,unknown>) => {
+    if (!accessToken || !realCompanyId) throw new Error('Sesión requerida');
+    const response = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(id)+'&company_id=eq.'+encodeURIComponent(realCompanyId),{
+      method:'PATCH',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error('Error al actualizar: HTTP '+response.status);
+    const rows = await response.json();
+    if (!Array.isArray(rows)||rows.length!==1) throw new Error('No se actualizó el registro. Revisá permisos.');
+  };
+  const [serviceStageDrafts,setServiceStageDrafts] = useState<Record<string,string>>({});
+  const changeRealServiceStage = async (id:string,status:string) => {
+    setRealDataBusy(true);
+    try {await patchReal('funeral_services',id,{status});await loadRealServices(accessToken,realCompanyId);setMessage('Etapa del expediente actualizada.');}
+    catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
+  };
   const saveOperationalRecord = async (event:React.FormEvent) => {
     event.preventDefault();
     if (!accessToken || !realCompanyId || !operationalTitle.trim()) {setMessage('Iniciá sesión e indicá un título.');return;}
     setRealDataBusy(true);
     try {
-      await requestReal('operational_records',accessToken,{company_id:realCompanyId,module:operationalModule,title:operationalTitle.trim(),details:{description:operationalDetails.trim()}});
+      if (editingOperationalId) await patchReal('operational_records',editingOperationalId,{title:operationalTitle.trim(),details:{description:operationalDetails.trim()},updated_at:new Date().toISOString()});
+      else await requestReal('operational_records',accessToken,{company_id:realCompanyId,module:operationalModule,title:operationalTitle.trim(),details:{description:operationalDetails.trim()}});
       await loadOperationalRecords(accessToken,realCompanyId);
-      setOperationalTitle('');setOperationalDetails('');
+      setOperationalTitle('');setOperationalDetails('');setEditingOperationalId('');
       setMessage('Registro de '+operationalModule+' guardado en Supabase.');
     } catch(error){setMessage(error instanceof Error?error.message:String(error));}
     finally{setRealDataBusy(false);}
@@ -361,10 +378,10 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
             </select></label>
             <label className="block text-sm">Título<input required value={operationalTitle} onChange={event=>setOperationalTitle(event.target.value)} className="block w-full rounded border p-2"/></label>
             <label className="block text-sm">Descripción<textarea value={operationalDetails} onChange={event=>setOperationalDetails(event.target.value)} className="block w-full rounded border p-2"/></label>
-            <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Guardar registro real</button>
+            <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{editingOperationalId?'Guardar cambios':'Guardar registro real'}</button>
           </form>
           <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);loadOperationalRecords(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="text-xs font-semibold underline">Actualizar registros reales</button>
-          <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.map(item=><p key={item.id} className="rounded bg-slate-50 px-2 py-1 text-xs"><strong>{item.module}</strong> · {item.title}</p>)}</div>
+          <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.filter(item=>item.module===activeView).map(item=><div key={item.id} className="flex justify-between gap-2 rounded bg-slate-50 px-2 py-1 text-xs"><span><strong>{item.module}</strong> · {item.title} · {String(item.details?.description||'')}</span><button type="button" className="underline" onClick={()=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details?.description||''));}}>Editar</button></div>)}</div>
         </section>}
         {(activeView === 'presupuestos' || activeView === 'dashboard') && <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <h3 className="font-semibold">Registrar abono real — Supabase</h3>
@@ -397,7 +414,7 @@ const MainLayout: React.FC = () => {
       {/* Top Bar Navigation */}
       <Header />
 
-      <SupabaseConnectionPanel onAuthChange={setRealMode} activeView={currentView} />
+
 
       {/* Demo Banner */}
       {!realMode && <DemoBanner />}
@@ -409,6 +426,7 @@ const MainLayout: React.FC = () => {
 
         {/* Content Viewport */}
         <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
+          <SupabaseConnectionPanel onAuthChange={setRealMode} activeView={currentView} />
           {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa: elegí un módulo en el menú para gestionar sus registros Supabase desde el área de conexión superior.</p>}
           {!realMode && <>
           {currentView === 'dashboard' && <DashboardView />}
