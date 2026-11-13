@@ -158,6 +158,11 @@ const SupabaseConnectionPanel: React.FC = () => {
       if (!Array.isArray(memberships)) throw new Error('Respuesta de membresías no válida.');
       if (memberships.length === 0) {
         setSignedIn(false);
+        setAccessToken('');
+        setAuthenticatedUserId('');
+        setRealCompanyId('');
+        setRealServices([]);
+        setRealBudgets([]);
         setAuthorizedCompanies([]);
         setPassword('');
         setMessage('Identidad verificada, pero no tenés una funeraria activa asignada. El acceso operativo sigue bloqueado.');
@@ -168,11 +173,17 @@ const SupabaseConnectionPanel: React.FC = () => {
       setAccessToken(data.access_token);
       setAuthenticatedUserId(identity.id);
       setRealCompanyId(memberships[0].company_id);
-      let loadWarning = '';
-      try { await Promise.all([loadRealServices(data.access_token,memberships[0].company_id),loadRealBudgets(data.access_token,memberships[0].company_id)]); }
-      catch (error) { loadWarning = error instanceof Error ? error.message : 'No se pudieron cargar datos reales.'; }
+      const loadResults = await Promise.allSettled([
+        loadRealServices(data.access_token, memberships[0].company_id),
+        loadRealBudgets(data.access_token, memberships[0].company_id)
+      ]);
+      const loadErrors = loadResults.flatMap((result, index) =>
+        result.status === 'rejected' ? [(index === 0 ? 'Expedientes: ' : 'Presupuestos: ') + (result.reason instanceof Error ? result.reason.message : 'Error de consulta.')] : []
+      );
+      if (loadResults[0].status === 'rejected') setRealServices([]);
+      if (loadResults[1].status === 'rejected') setRealBudgets([]);
       setPassword('');
-      setMessage(loadWarning || 'Identidad y membresía verificadas en Supabase. Los datos reales se muestran por separado; los módulos operativos siguen en modo demostración.');
+      setMessage(loadErrors.length ? 'Sesión verificada, pero falló la consulta de datos reales. ' + loadErrors.join(' ') : 'Identidad y membresía verificadas en Supabase. Los datos reales se muestran por separado; los módulos operativos siguen en modo demostración.');
     } catch (error) {
       setSignedIn(false);
       setAccessToken('');
