@@ -21,14 +21,14 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_tR95J4J1ZQP0XpvoOUtEDA_guyXCWEm
 
 const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean) => void; activeView?: string }> = ({onAuthChange, activeView}) => {
   const [open, setOpen] = useState(false);
-  useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
-  useEffect(() => { if (signedIn) setOpen(true); }, [signedIn]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Modo demostración: los expedientes todavía no se guardan en Supabase.');
   const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
   const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
+  useEffect(() => { if (signedIn) setOpen(true); }, [signedIn]);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [recoveryToken, setRecoveryToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
