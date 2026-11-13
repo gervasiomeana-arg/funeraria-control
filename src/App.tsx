@@ -51,9 +51,19 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [paymentMethodReal, setPaymentMethodReal] = useState('transferencia_spei');
   const [paymentReferenceReal, setPaymentReferenceReal] = useState('');
   const [operationalModule, setOperationalModule] = useState<'agenda'|'familias'|'inventario'|'recursos'|'reportes'|'admin'>('agenda');
+  useEffect(()=>{if (activeView && ['agenda','familias','inventario','recursos','reportes','admin'].includes(activeView)) {setOperationalModule(activeView as typeof operationalModule);setEditingOperationalId('');setOperationalTitle('');setOperationalDetails('');setOperationalFields({});}},[activeView]);
   const [operationalTitle, setOperationalTitle] = useState('');
   const [editingOperationalId, setEditingOperationalId] = useState('');
   const [operationalDetails, setOperationalDetails] = useState('');
+  const [operationalFields,setOperationalFields] = useState<Record<string,string>>({});
+  const moduleFields: Record<string,Array<{key:string;label:string;type?:string}>> = {
+    agenda:[{key:'date',label:'Fecha',type:'date'},{key:'time',label:'Hora',type:'time'},{key:'service',label:'Expediente'},{key:'responsible',label:'Responsable'}],
+    familias:[{key:'contact',label:'Contacto familiar'},{key:'phone',label:'Teléfono',type:'tel'},{key:'email',label:'Correo',type:'email'},{key:'service',label:'Expediente'}],
+    inventario:[{key:'sku',label:'Código SKU'},{key:'quantity',label:'Existencias',type:'number'},{key:'minimum',label:'Stock mínimo',type:'number'},{key:'unit',label:'Unidad'}],
+    recursos:[{key:'kind',label:'Tipo de recurso'},{key:'responsible',label:'Responsable'},{key:'availability',label:'Disponibilidad'},{key:'branch',label:'Sucursal'}],
+    reportes:[{key:'period',label:'Período'},{key:'category',label:'Categoría'},{key:'author',label:'Elaborado por'}],
+    admin:[{key:'setting',label:'Configuración'},{key:'value',label:'Valor'},{key:'responsible',label:'Responsable'}]
+  };
   const [operationalRecords, setOperationalRecords] = useState<Array<{id:string;module:string;title:string;details:Record<string,unknown>;created_at:string}>>([]);
   const loadOperationalRecords = async (token:string, companyId:string) => {
     const response = await fetch(SUPABASE_URL+'/rest/v1/operational_records?select=id,module,title,details,created_at&company_id=eq.'+encodeURIComponent(companyId)+'&order=created_at.desc&limit=200',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
@@ -82,10 +92,10 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     if (!accessToken || !realCompanyId || !operationalTitle.trim()) {setMessage('Iniciá sesión e indicá un título.');return;}
     setRealDataBusy(true);
     try {
-      if (editingOperationalId) await patchReal('operational_records',editingOperationalId,{title:operationalTitle.trim(),details:{description:operationalDetails.trim()},updated_at:new Date().toISOString()});
-      else await requestReal('operational_records',accessToken,{company_id:realCompanyId,module:operationalModule,title:operationalTitle.trim(),details:{description:operationalDetails.trim()}});
+      if (editingOperationalId) await patchReal('operational_records',editingOperationalId,{title:operationalTitle.trim(),details:{...operationalFields,description:operationalDetails.trim()},updated_at:new Date().toISOString()});
+      else await requestReal('operational_records',accessToken,{company_id:realCompanyId,module:operationalModule,title:operationalTitle.trim(),details:{...operationalFields,description:operationalDetails.trim()}});
       await loadOperationalRecords(accessToken,realCompanyId);
-      setOperationalTitle('');setOperationalDetails('');setEditingOperationalId('');
+      setOperationalTitle('');setOperationalDetails('');setOperationalFields({});setEditingOperationalId('');
       setMessage('Registro de '+operationalModule+' guardado en Supabase.');
     } catch(error){setMessage(error instanceof Error?error.message:String(error));}
     finally{setRealDataBusy(false);}
@@ -284,13 +294,17 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       setRealCompanyId(memberships[0].company_id);
       const loadResults = await Promise.allSettled([
         loadRealServices(data.access_token, memberships[0].company_id),
-        loadRealBudgets(data.access_token, memberships[0].company_id)
+        loadRealBudgets(data.access_token, memberships[0].company_id),
+        loadRealPayments(data.access_token, memberships[0].company_id),
+        loadOperationalRecords(data.access_token, memberships[0].company_id)
       ]);
       const loadErrors = loadResults.flatMap((result, index) =>
-        result.status === 'rejected' ? [(index === 0 ? 'Expedientes: ' : 'Presupuestos: ') + (result.reason instanceof Error ? result.reason.message : 'Error de consulta.')] : []
+        result.status === 'rejected' ? [(['Expedientes: ','Presupuestos: ','Pagos: ','Módulos: '][index] || 'Datos: ') + (result.reason instanceof Error ? result.reason.message : 'Error de consulta.')] : []
       );
       if (loadResults[0].status === 'rejected') setRealServices([]);
       if (loadResults[1].status === 'rejected') setRealBudgets([]);
+      if (loadResults[2].status === 'rejected') setRealPayments([]);
+      if (loadResults[3].status === 'rejected') setOperationalRecords([]);
       setPassword('');
       setMessage(loadErrors.length ? 'Sesión verificada, pero falló la consulta de datos reales. ' + loadErrors.join(' ') : 'Identidad y membresía verificadas en Supabase. Los datos reales se muestran por separado; los módulos operativos siguen en modo demostración.');
     } catch (error) {
@@ -374,14 +388,15 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           <p className="text-xs text-slate-600">Agenda, familias, inventario, personal y recursos, reportes y administración. Los registros están aislados por funeraria.</p>
           <form onSubmit={saveOperationalRecord} className="space-y-2">
             <label className="block text-sm">Módulo<select value={operationalModule} onChange={event=>setOperationalModule(event.target.value as typeof operationalModule)} className="block w-full rounded border p-2">
-              {(['agenda','familias','inventario','recursos','reportes','admin'] as const).map(module=><option key={module} value={module}>{module}</option>)}
+              {([activeView] as string[]).filter(module=>moduleFields[module]).map(module=><option key={module} value={module}>{module}</option>)}
             </select></label>
             <label className="block text-sm">Título<input required value={operationalTitle} onChange={event=>setOperationalTitle(event.target.value)} className="block w-full rounded border p-2"/></label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{(moduleFields[operationalModule]||[]).map(field=><label key={field.key} className="block text-sm">{field.label}<input type={field.type||'text'} value={operationalFields[field.key]||''} onChange={event=>setOperationalFields(prev=>({...prev,[field.key]:event.target.value}))} className="block w-full rounded border p-2"/></label>)}</div>
             <label className="block text-sm">Descripción<textarea value={operationalDetails} onChange={event=>setOperationalDetails(event.target.value)} className="block w-full rounded border p-2"/></label>
             <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{editingOperationalId?'Guardar cambios':'Guardar registro real'}</button>
           </form>
           <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);loadOperationalRecords(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="text-xs font-semibold underline">Actualizar registros reales</button>
-          <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.filter(item=>item.module===activeView).map(item=><div key={item.id} className="flex justify-between gap-2 rounded bg-slate-50 px-2 py-1 text-xs"><span><strong>{item.module}</strong> · {item.title} · {String(item.details?.description||'')}</span><button type="button" className="underline" onClick={()=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details?.description||''));}}>Editar</button></div>)}</div>
+          <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.filter(item=>item.module===activeView).map(item=><div key={item.id} className="flex justify-between gap-2 rounded bg-slate-50 px-2 py-1 text-xs"><span><strong>{item.module}</strong> · {item.title} · {String(item.details?.description||'')}</span><button type="button" className="underline" onClick={()=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details?.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details||{}).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}}>Editar</button></div>)}</div>
         </section>}
         {(activeView === 'presupuestos' || activeView === 'dashboard') && <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <h3 className="font-semibold">Registrar abono real — Supabase</h3>
@@ -399,7 +414,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         {(activeView === 'servicios' || activeView === 'dashboard') && <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>}
       </section>}
-      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
     </div>}
   </div>;
