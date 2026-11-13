@@ -40,6 +40,73 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [realCompanyId, setRealCompanyId] = useState('');
   const [realDataBusy, setRealDataBusy] = useState(false);
   const [realBudgets, setRealBudgets] = useState<Array<{id:string;service_id:string;subtotal_mxn:number;discount_mxn:number;tax_mxn:number;status:string}>>([]);
+  const [budgetServiceId, setBudgetServiceId] = useState('');
+  const [budgetSubtotal, setBudgetSubtotal] = useState('');
+  const [budgetDiscount, setBudgetDiscount] = useState('0');
+  const [budgetIvaRate, setBudgetIvaRate] = useState('16');
+  const [paymentBudgetId, setPaymentBudgetId] = useState('');
+  const [paymentAmountMxn, setPaymentAmountMxn] = useState('');
+  const [paymentMethodReal, setPaymentMethodReal] = useState('transferencia_spei');
+  const [paymentReferenceReal, setPaymentReferenceReal] = useState('');
+  const [realPayments, setRealPayments] = useState<Array<{id:string;budget_id:string;amount_mxn:number;method:string;reference:string|null}>>([]);
+  const money = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const requestReal = async (endpoint: string, token: string, payload: Record<string, unknown>) => {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
+      method: 'POST',
+      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Prefer: 'return=minimal'},
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const details = await response.json().catch(() => ({}));
+      throw new Error('Supabase HTTP ' + response.status + ': ' + (details.message || 'No se pudo guardar.'));
+    }
+  };
+  const loadRealPayments = async (token: string, companyId: string) => {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/budget_payments?select=id,budget_id,amount_mxn,method,reference&company_id=eq.' + encodeURIComponent(companyId) + '&limit=200', {
+      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
+    });
+    if (!response.ok) throw new Error('No se pudieron consultar los pagos reales (HTTP ' + response.status + ').');
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de pagos.');
+    setRealPayments(rows);
+  };
+  const saveRealBudget = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !realCompanyId) { setMessage('Iniciá sesión para guardar un presupuesto real.'); return; }
+    if (!realServices.some(service => service.id === budgetServiceId)) { setMessage('Seleccioná un expediente real de tu funeraria.'); return; }
+    const subtotal = Number(budgetSubtotal), discount = Number(budgetDiscount), rate = Number(budgetIvaRate);
+    if (![subtotal,discount,rate].every(Number.isFinite) || subtotal <= 0 || discount < 0 || discount > subtotal || rate < 0 || rate > 100) { setMessage('Revisá subtotal, descuento e IVA.'); return; }
+    if ([subtotal,discount].some(value => Math.abs(value * 100 - Math.round(value * 100)) > 0.000001)) { setMessage('Los importes deben tener como máximo dos decimales.'); return; }
+    setRealDataBusy(true);
+    try {
+      await requestReal('budgets', accessToken, {company_id: realCompanyId, service_id: budgetServiceId, subtotal_mxn: money(subtotal), discount_mxn: money(discount), tax_mxn: money((subtotal-discount)*rate/100), status: 'draft'});
+      await loadRealBudgets(accessToken, realCompanyId);
+      setBudgetSubtotal('');
+      setBudgetDiscount('0');
+      setMessage('Presupuesto real guardado en Supabase.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    finally { setRealDataBusy(false); }
+  };
+  const saveRealPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !realCompanyId) { setMessage('Iniciá sesión para registrar un abono.'); return; }
+    const budget = realBudgets.find(item => item.id === paymentBudgetId);
+    if (!budget) { setMessage('Seleccioná un presupuesto real.'); return; }
+    const amount = Number(paymentAmountMxn);
+    const total = money(Number(budget.subtotal_mxn)-Number(budget.discount_mxn)+Number(budget.tax_mxn));
+    const paid = money(realPayments.filter(item=>item.budget_id===budget.id).reduce((sum,item)=>sum+Number(item.amount_mxn),0));
+    if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount*100-Math.round(amount*100))>0.000001 || money(amount)>money(total-paid)) { setMessage('El abono debe ser positivo, con máximo dos decimales y no superar el saldo.'); return; }
+    if (!['efectivo','tarjeta_debito','tarjeta_credito','transferencia_spei'].includes(paymentMethodReal)) { setMessage('Método de pago inválido.'); return; }
+    setRealDataBusy(true);
+    try {
+      await requestReal('budget_payments',accessToken,{company_id:realCompanyId,budget_id:budget.id,amount_mxn:money(amount),method:paymentMethodReal,reference:paymentReferenceReal.trim()||null});
+      await loadRealPayments(accessToken,realCompanyId);
+      setPaymentAmountMxn('');
+      setPaymentReferenceReal('');
+      setMessage('Abono real registrado y recuperado de Supabase.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    finally { setRealDataBusy(false); }
+  };
   const loadRealBudgets = async (token: string, companyId: string) => {
     const response = await fetch(SUPABASE_URL + '/rest/v1/budgets?select=id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status&company_id=eq.' + encodeURIComponent(companyId) + '&limit=30', {
       headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
@@ -237,12 +304,40 @@ const SupabaseConnectionPanel: React.FC = () => {
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':'Guardar en Supabase'}</button>
         </form>
+        <form onSubmit={saveRealBudget} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+          <h3 className="font-semibold">Nuevo presupuesto real — Supabase</h3>
+          <label className="block text-sm">Expediente real
+            <select required value={budgetServiceId} onChange={event=>setBudgetServiceId(event.target.value)} className="block w-full rounded border p-2">
+              <option value="">Seleccionar expediente</option>
+              {realServices.map(service=><option key={service.id} value={service.id}>{service.reference} · {service.deceased_name}</option>)}
+            </select>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label className="text-sm">Subtotal MXN<input required type="number" min="0.01" step="0.01" value={budgetSubtotal} onChange={event=>setBudgetSubtotal(event.target.value)} className="block w-full rounded border p-2"/></label>
+            <label className="text-sm">Descuento MXN<input required type="number" min="0" step="0.01" value={budgetDiscount} onChange={event=>setBudgetDiscount(event.target.value)} className="block w-full rounded border p-2"/></label>
+            <label className="text-sm">IVA %<input required type="number" min="0" max="100" step="0.01" value={budgetIvaRate} onChange={event=>setBudgetIvaRate(event.target.value)} className="block w-full rounded border p-2"/></label>
+          </div>
+          <button type="submit" disabled={realDataBusy || realServices.length===0} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Guardar presupuesto real</button>
+        </form>
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
           <h3 className="font-semibold">Presupuestos reales (solo lectura)</h3>
           <p className="mt-1 text-slate-500">Registros de Supabase separados de los presupuestos de demostración.</p>
           {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="rounded border border-slate-100 p-2">{b.status} · {b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</li>)}</ul>}
-          <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);loadRealBudgets(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
+          <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
+        <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+          <h3 className="font-semibold">Registrar abono real — Supabase</h3>
+          <label className="block text-sm">Presupuesto
+            <select required value={paymentBudgetId} onChange={event=>setPaymentBudgetId(event.target.value)} className="block w-full rounded border p-2">
+              <option value="">Seleccionar presupuesto</option>
+              {realBudgets.map(budget=>{const total=money(Number(budget.subtotal_mxn)-Number(budget.discount_mxn)+Number(budget.tax_mxn));const paid=money(realPayments.filter(p=>p.budget_id===budget.id).reduce((sum,p)=>sum+Number(p.amount_mxn),0));return <option key={budget.id} value={budget.id}>{budget.service_id} · Saldo MXN {money(total-paid).toFixed(2)}</option>;})}
+            </select>
+          </label>
+          <label className="block text-sm">Abono MXN<input required type="number" min="0.01" step="0.01" value={paymentAmountMxn} onChange={event=>setPaymentAmountMxn(event.target.value)} className="block w-full rounded border p-2"/></label>
+          <label className="block text-sm">Método<select value={paymentMethodReal} onChange={event=>setPaymentMethodReal(event.target.value)} className="block w-full rounded border p-2"><option value="transferencia_spei">Transferencia SPEI</option><option value="efectivo">Efectivo</option><option value="tarjeta_debito">Débito</option><option value="tarjeta_credito">Crédito</option></select></label>
+          <label className="block text-sm">Referencia<input value={paymentReferenceReal} onChange={event=>setPaymentReferenceReal(event.target.value)} className="block w-full rounded border p-2"/></label>
+          <button type="submit" disabled={realDataBusy || realBudgets.length===0} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Registrar abono real</button>
+        </form>
         <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>
       </section>}
