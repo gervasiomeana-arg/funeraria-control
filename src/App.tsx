@@ -48,6 +48,29 @@ const SupabaseConnectionPanel: React.FC = () => {
   const [paymentAmountMxn, setPaymentAmountMxn] = useState('');
   const [paymentMethodReal, setPaymentMethodReal] = useState('transferencia_spei');
   const [paymentReferenceReal, setPaymentReferenceReal] = useState('');
+  const [operationalModule, setOperationalModule] = useState<'agenda'|'familias'|'inventario'|'recursos'|'reportes'|'admin'>('agenda');
+  const [operationalTitle, setOperationalTitle] = useState('');
+  const [operationalDetails, setOperationalDetails] = useState('');
+  const [operationalRecords, setOperationalRecords] = useState<Array<{id:string;module:string;title:string;details:Record<string,unknown>;created_at:string}>>([]);
+  const loadOperationalRecords = async (token:string, companyId:string) => {
+    const response = await fetch(SUPABASE_URL+'/rest/v1/operational_records?select=id,module,title,details,created_at&company_id=eq.'+encodeURIComponent(companyId)+'&order=created_at.desc&limit=200',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
+    if (!response.ok) throw new Error('No se pudieron consultar los módulos operativos (HTTP '+response.status+').');
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de módulos.');
+    setOperationalRecords(rows);
+  };
+  const saveOperationalRecord = async (event:React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !realCompanyId || !operationalTitle.trim()) {setMessage('Iniciá sesión e indicá un título.');return;}
+    setRealDataBusy(true);
+    try {
+      await requestReal('operational_records',accessToken,{company_id:realCompanyId,module:operationalModule,title:operationalTitle.trim(),details:{description:operationalDetails.trim()}});
+      await loadOperationalRecords(accessToken,realCompanyId);
+      setOperationalTitle('');setOperationalDetails('');
+      setMessage('Registro de '+operationalModule+' guardado en Supabase.');
+    } catch(error){setMessage(error instanceof Error?error.message:String(error));}
+    finally{setRealDataBusy(false);}
+  };
   const [realPayments, setRealPayments] = useState<Array<{id:string;budget_id:string;amount_mxn:number;method:string;reference:string|null}>>([]);
   const money = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
   const requestReal = async (endpoint: string, token: string, payload: Record<string, unknown>) => {
@@ -325,6 +348,20 @@ const SupabaseConnectionPanel: React.FC = () => {
           {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="rounded border border-slate-100 p-2">{b.status} · {b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</li>)}</ul>}
           <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
+        <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+          <h3 className="font-semibold">Registros reales de otros módulos — Supabase</h3>
+          <p className="text-xs text-slate-600">Agenda, familias, inventario, personal y recursos, reportes y administración. Los registros están aislados por funeraria.</p>
+          <form onSubmit={saveOperationalRecord} className="space-y-2">
+            <label className="block text-sm">Módulo<select value={operationalModule} onChange={event=>setOperationalModule(event.target.value as typeof operationalModule)} className="block w-full rounded border p-2">
+              {(['agenda','familias','inventario','recursos','reportes','admin'] as const).map(module=><option key={module} value={module}>{module}</option>)}
+            </select></label>
+            <label className="block text-sm">Título<input required value={operationalTitle} onChange={event=>setOperationalTitle(event.target.value)} className="block w-full rounded border p-2"/></label>
+            <label className="block text-sm">Descripción<textarea value={operationalDetails} onChange={event=>setOperationalDetails(event.target.value)} className="block w-full rounded border p-2"/></label>
+            <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Guardar registro real</button>
+          </form>
+          <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);loadOperationalRecords(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="text-xs font-semibold underline">Actualizar registros reales</button>
+          <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.map(item=><p key={item.id} className="rounded bg-slate-50 px-2 py-1 text-xs"><strong>{item.module}</strong> · {item.title}</p>)}</div>
+        </section>
         <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <h3 className="font-semibold">Registrar abono real — Supabase</h3>
           <label className="block text-sm">Presupuesto
