@@ -19,8 +19,9 @@ import { AIAssistantModal } from './components/ai/AIAssistantModal';
 const SUPABASE_URL = 'https://vfqiudqoerfnmnkwugie.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_tR95J4J1ZQP0XpvoOUtEDA_guyXCWEm';
 
-const SupabaseConnectionPanel: React.FC = () => {
+const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean) => void; activeView?: string }> = ({onAuthChange, activeView}) => {
   const [open, setOpen] = useState(false);
+  useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -386,16 +387,17 @@ const SupabaseConnectionPanel: React.FC = () => {
 
 const MainLayout: React.FC = () => {
   const { currentView, toastMessage } = useApp();
+  const [realMode, setRealMode] = useState(false);
 
   return (
     <div className="fc-premium-shell min-h-screen flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
       {/* Top Bar Navigation */}
       <Header />
 
-      <SupabaseConnectionPanel />
+      <SupabaseConnectionPanel onAuthChange={setRealMode} activeView={currentView} />
 
       {/* Demo Banner */}
-      <DemoBanner />
+      {!realMode && <DemoBanner />}
 
       {/* Main Body with Sidebar + Content */}
       <div className="flex-1 flex flex-col md:flex-row">
@@ -404,6 +406,7 @@ const MainLayout: React.FC = () => {
 
         {/* Content Viewport */}
         <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
+          {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa. Los registros reales se gestionan desde el panel Supabase superior. Las vistas siguientes muestran información de demostración y no representan datos reales.</p>}
           {currentView === 'dashboard' && <DashboardView />}
           {currentView === 'servicios' && <ServicesView />}
           {currentView === 'agenda' && <ScheduleView />}
