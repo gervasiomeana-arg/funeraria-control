@@ -102,7 +102,7 @@ export const BudgetsView: React.FC = () => {
     if (!selectedBudget) return;
     const paid = selectedBudget.payments.reduce((sum, payment) => sum + payment.amountMxn, 0);
     const outstanding = Math.max(0, selectedBudget.totalMxn - paid);
-    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || Math.round(paymentAmount * 100) !== paymentAmount * 100 || paymentAmount > outstanding + 0.000001) {
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || Math.abs(Math.round(paymentAmount * 100) - paymentAmount * 100) > 0.000001 || paymentAmount > outstanding + 0.000001) {
       setBudgetError('El abono debe ser mayor que cero y no puede superar el saldo pendiente.');
       return;
     }
