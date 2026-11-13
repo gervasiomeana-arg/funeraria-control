@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const url = process.env.TARGET_URL || 'https://funeraria-control.ai.studio';
 const dir = 'test-results';
+const reportName = (process.env.REPORT_NAME || 'prueba').replace(/[^a-z0-9_-]/gi, '-');
 fs.mkdirSync(dir, { recursive: true });
 const result = { url, checkedAt: new Date().toISOString(), status: 'pending', httpStatus: null, title: '', headingCount: 0, pageErrors: [], failedRequests: [], notes: [] };
 let browser;
@@ -19,14 +20,14 @@ try {
   result.title = await page.title();
   result.headingCount = await page.locator('h1,h2').count();
   result.notes.push('Prueba publica sin credenciales: no verifica sesiones privadas ni transacciones.');
-  await page.screenshot({ path: path.join(dir, 'captura.png'), fullPage: true });
-  result.status = response?.ok() && result.pageErrors.length === 0 ? 'passed' : 'failed';
+  await page.screenshot({ path: path.join(dir, 'captura-' + reportName + '.png'), fullPage: true });
+  result.status = response?.ok() && result.pageErrors.length === 0 && result.headingCount > 0 ? 'passed' : 'failed';
 } catch (error) {
   result.status = 'failed';
   result.notes.push(error instanceof Error ? error.message : String(error));
 } finally {
   await browser?.close();
-  fs.writeFileSync(path.join(dir, 'informe.json'), JSON.stringify(result, null, 2));
+  fs.writeFileSync(path.join(dir, 'informe-' + reportName + '.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 }
 if (result.status !== 'passed') process.exitCode = 1;
