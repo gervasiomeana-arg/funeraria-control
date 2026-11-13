@@ -22,6 +22,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_tR95J4J1ZQP0XpvoOUtEDA_guyXCWEm
 const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean) => void; activeView?: string }> = ({onAuthChange, activeView}) => {
   const [open, setOpen] = useState(false);
   useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
+  useEffect(() => { if (signedIn) setOpen(true); }, [signedIn]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -321,14 +322,15 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
-        <h3 className="font-semibold">Expedientes reales — Supabase</h3>
+        {(activeView === 'servicios' || activeView === 'dashboard') && <div><h3 className="font-semibold">Expedientes reales — Supabase</h3>
         <p className="mt-1 text-[11px] text-slate-600">Área separada de los expedientes ficticios. Los registros nuevos se guardan en la base de datos de tu funeraria.</p>
         <form onSubmit={saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">Folio<input required maxLength={80} value={realReference} onChange={event=>setRealReference(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':'Guardar en Supabase'}</button>
         </form>
-        <form onSubmit={saveRealBudget} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+        </div>}
+        {(activeView === 'presupuestos' || activeView === 'dashboard') && <div><form onSubmit={saveRealBudget} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <h3 className="font-semibold">Nuevo presupuesto real — Supabase</h3>
           <label className="block text-sm">Expediente real
             <select required value={budgetServiceId} onChange={event=>setBudgetServiceId(event.target.value)} className="block w-full rounded border p-2">
@@ -349,7 +351,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="rounded border border-slate-100 p-2">{b.status} · {b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</li>)}</ul>}
           <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
-        <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+        </div>}
+        {(['agenda','familias','inventario','recursos','reportes','admin'].includes(activeView || '')) && <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-3">
           <h3 className="font-semibold">Registros reales de otros módulos — Supabase</h3>
           <p className="text-xs text-slate-600">Agenda, familias, inventario, personal y recursos, reportes y administración. Los registros están aislados por funeraria.</p>
           <form onSubmit={saveOperationalRecord} className="space-y-2">
@@ -362,8 +365,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           </form>
           <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);loadOperationalRecords(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="text-xs font-semibold underline">Actualizar registros reales</button>
           <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.map(item=><p key={item.id} className="rounded bg-slate-50 px-2 py-1 text-xs"><strong>{item.module}</strong> · {item.title}</p>)}</div>
-        </section>
-        <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+        </section>}
+        {(activeView === 'presupuestos' || activeView === 'dashboard') && <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <h3 className="font-semibold">Registrar abono real — Supabase</h3>
           <label className="block text-sm">Presupuesto
             <select required value={paymentBudgetId} onChange={event=>setPaymentBudgetId(event.target.value)} className="block w-full rounded border p-2">
@@ -375,9 +378,9 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           <label className="block text-sm">Método<select value={paymentMethodReal} onChange={event=>setPaymentMethodReal(event.target.value)} className="block w-full rounded border p-2"><option value="transferencia_spei">Transferencia SPEI</option><option value="efectivo">Efectivo</option><option value="tarjeta_debito">Débito</option><option value="tarjeta_credito">Crédito</option></select></label>
           <label className="block text-sm">Referencia<input value={paymentReferenceReal} onChange={event=>setPaymentReferenceReal(event.target.value)} className="block w-full rounded border p-2"/></label>
           <button type="submit" disabled={realDataBusy || realBudgets.length===0} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Registrar abono real</button>
-        </form>
-        <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
-        <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>
+        </form>}
+        {(activeView === 'servicios' || activeView === 'dashboard') && <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><p key={item.id} className="rounded-lg bg-white px-3 py-2">{item.reference} · {item.deceased_name || 'Sin nombre'} · {item.status}</p>)}</div>
+        <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button>}
       </section>}
       {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
@@ -406,7 +409,8 @@ const MainLayout: React.FC = () => {
 
         {/* Content Viewport */}
         <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
-          {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa. Los registros reales se gestionan desde el panel Supabase superior. Las vistas siguientes muestran información de demostración y no representan datos reales.</p>}
+          {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa: elegí un módulo en el menú para gestionar sus registros Supabase desde el área de conexión superior.</p>}
+          {!realMode && <>
           {currentView === 'dashboard' && <DashboardView />}
           {currentView === 'servicios' && <ServicesView />}
           {currentView === 'agenda' && <ScheduleView />}
@@ -416,6 +420,7 @@ const MainLayout: React.FC = () => {
           {currentView === 'recursos' && <ResourcesView />}
           {currentView === 'reportes' && <ReportsView />}
           {currentView === 'admin' && <AdminView />}
+          </>
         </main>
       </div>
 
