@@ -6,7 +6,7 @@ const url = process.env.TARGET_URL || 'https://funeraria-control.ai.studio';
 const dir = 'test-results';
 const reportName = (process.env.REPORT_NAME || 'prueba').replace(/[^a-z0-9_-]/gi, '-');
 fs.mkdirSync(dir, { recursive: true });
-const result = { url, checkedAt: new Date().toISOString(), status: 'pending', httpStatus: null, title: '', headingCount: 0, pageErrors: [], failedRequests: [], modules: [], notes: [] };
+const result = { url, checkedAt: new Date().toISOString(), status: 'pending', httpStatus: null, title: '', headingCount: 0, pageErrors: [], failedRequests: [], modules: [], readiness: { demoMode: null, realServicesVisible: null, realBudgetsReadOnly: null, productionReady: false }, notes: [] };
 let browser;
 try {
   browser = await chromium.launch({ headless: true });
@@ -19,6 +19,9 @@ try {
   await page.waitForTimeout(2500);
   result.title = await page.title();
   result.headingCount = await page.locator('h1,h2').count();
+  result.readiness.demoMode = await page.getByText('Modo Demostración Operativa', { exact: false }).count() > 0;
+  result.readiness.realServicesVisible = await page.getByText('Expedientes reales', { exact: false }).count() > 0;
+  result.readiness.realBudgetsReadOnly = await page.getByText('Presupuestos reales (solo lectura)', { exact: false }).count() > 0;
   const modules = ['1. Inicio', '2. Servicios', '3. Agenda', '4. Familias', '5. Presupuestos', '6. Inventario', '7. Personal y recursos', '8. Reportes', '9. Administración'];
   for (const moduleName of modules) {
     const nav = page.locator('aside nav button').filter({ hasText: moduleName });
@@ -35,6 +38,8 @@ try {
     result.modules.push(item);
   }
   result.notes.push('Prueba pública sin credenciales: navegación de 9 módulos; no verifica sesiones privadas ni transacciones.');
+  if (result.readiness.demoMode) result.notes.push('NO APTO PARA PRODUCCION: la interfaz sigue indicando modo demostración; no certificar datos ni operaciones reales.');
+  result.readiness.productionReady = false;
   await page.screenshot({ path: path.join(dir, 'captura-' + reportName + '.png'), fullPage: true });
   result.status = response?.ok() && result.pageErrors.length === 0 && result.headingCount > 0 && result.modules.every(m => m.clicked && m.bodyHasContent) ? 'passed' : 'failed';
 } catch (error) {
