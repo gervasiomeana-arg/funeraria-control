@@ -1,0 +1,38 @@
+name: Prueba navegador Funeraria Control
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/browser-check.yml'
+      - 'tests/browser-check.mjs'
+  schedule:
+    - cron: '0 12 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar Playwright
+        run: npm install --no-save --package-lock=false playwright@1.58.2
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Probar sitio publicado sin alterar datos
+        run: node tests/browser-check.mjs
+        env:
+          TARGET_URL: https://funeraria-control.ai.studio
+      - name: Guardar informe y captura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-navegador
+          path: test-results/
+          if-no-files-found: ignore
