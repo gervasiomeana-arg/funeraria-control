@@ -168,10 +168,11 @@ const SupabaseConnectionPanel: React.FC = () => {
       setAccessToken(data.access_token);
       setAuthenticatedUserId(identity.id);
       setRealCompanyId(memberships[0].company_id);
+      let loadWarning = '';
       try { await Promise.all([loadRealServices(data.access_token,memberships[0].company_id),loadRealBudgets(data.access_token,memberships[0].company_id)]); }
-      catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar expedientes.'); }
+      catch (error) { loadWarning = error instanceof Error ? error.message : 'No se pudieron cargar datos reales.'; }
       setPassword('');
-      setMessage('Identidad y membresía verificadas en Supabase. La operación continúa en modo demostración hasta activar persistencia real.');
+      setMessage(loadWarning || 'Identidad y membresía verificadas en Supabase. Los datos reales se muestran por separado; los módulos operativos siguen en modo demostración.');
     } catch (error) {
       setSignedIn(false);
       setAccessToken('');
