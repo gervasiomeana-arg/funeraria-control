@@ -82,6 +82,21 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     if (!Array.isArray(rows)||rows.length!==1) throw new Error('No se actualizó el registro. Revisá permisos.');
   };
   const [serviceStageDrafts,setServiceStageDrafts] = useState<Record<string,string>>({});
+  const [editingServiceId,setEditingServiceId] = useState('');
+  const [editingBudgetId,setEditingBudgetId] = useState('');
+  const [budgetStatusDrafts,setBudgetStatusDrafts] = useState<Record<string,string>>({});
+  const saveServiceChanges = async (event:React.FormEvent) => {
+    event.preventDefault();
+    if (!editingServiceId) return;
+    setRealDataBusy(true);
+    try {await patchReal('funeral_services',editingServiceId,{reference:realReference.trim(),deceased_name:realDeceasedName.trim()});await loadRealServices(accessToken,realCompanyId);setEditingServiceId('');setRealReference('');setRealDeceasedName('');setMessage('Expediente actualizado.');}
+    catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
+  };
+  const changeBudgetStatus = async (id:string,status:string) => {
+    setRealDataBusy(true);
+    try {await patchReal('budgets',id,{status});await loadRealBudgets(accessToken,realCompanyId);setMessage('Presupuesto actualizado.');}
+    catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
+  };
   const changeRealServiceStage = async (id:string,status:string) => {
     setRealDataBusy(true);
     try {await patchReal('funeral_services',id,{status});await loadRealServices(accessToken,realCompanyId);setMessage('Etapa del expediente actualizada.');}
@@ -355,10 +370,10 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
         {(activeView === 'servicios' || activeView === 'dashboard') && <div><h3 className="font-semibold">Expedientes reales — Supabase</h3>
         <p className="mt-1 text-[11px] text-slate-600">Área separada de los expedientes ficticios. Los registros nuevos se guardan en la base de datos de tu funeraria.</p>
-        <form onSubmit={saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
+        <form onSubmit={editingServiceId?saveServiceChanges:saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">Folio<input required maxLength={80} value={realReference} onChange={event=>setRealReference(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
-          <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':'Guardar en Supabase'}</button>
+          <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':editingServiceId?'Guardar cambios':'Guardar en Supabase'}</button>
         </form>
         </div>}
         {(activeView === 'presupuestos' || activeView === 'dashboard') && <div><form onSubmit={saveRealBudget} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
@@ -377,9 +392,9 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           <button type="submit" disabled={realDataBusy || realServices.length===0} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Guardar presupuesto real</button>
         </form>
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
-          <h3 className="font-semibold">Presupuestos reales (solo lectura)</h3>
+          <h3 className="font-semibold">Presupuestos reales</h3>
           <p className="mt-1 text-slate-500">Registros de Supabase separados de los presupuestos de demostración.</p>
-          {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="rounded border border-slate-100 p-2">{b.status} · {b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</li>)}</ul>}
+          {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-100 p-2"><span>{b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</span><select disabled={realDataBusy} value={budgetStatusDrafts[b.id]||b.status} onChange={event=>{setBudgetStatusDrafts(prev=>({...prev,[b.id]:event.target.value}));void changeBudgetStatus(b.id,event.target.value);}} className="rounded border p-2">{['draft','pending','approved','paid','cancelled'].map(status=><option key={status} value={status}>{status}</option>)}</select></li>)}</ul>}
           <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
         </div>}
