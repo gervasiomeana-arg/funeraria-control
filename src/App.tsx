@@ -454,7 +454,7 @@ const MainLayout: React.FC = () => {
           {currentView === 'recursos' && <ResourcesView />}
           {currentView === 'reportes' && <ReportsView />}
           {currentView === 'admin' && <AdminView />}
-          </>
+          </>}
         </main>
       </div>
 
