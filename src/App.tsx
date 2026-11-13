@@ -368,6 +368,17 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
+        {activeView==='dashboard' && <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-white p-4"><strong className="block text-2xl">{realServices.length}</strong><span>Expedientes reales consultados</span></div>
+          <div className="rounded-lg bg-white p-4"><strong className="block text-2xl">{realBudgets.length}</strong><span>Presupuestos reales consultados</span></div>
+          <div className="rounded-lg bg-white p-4"><strong className="block text-2xl">{realPayments.length}</strong><span>Abonos reales consultados</span></div>
+        </div>}
+        {activeView==='reportes' && <div className="mb-4 rounded-lg bg-white p-4">
+          <h3 className="font-semibold">Informe operativo — registros reales cargados</h3>
+          <p>Expedientes: {realServices.length} · Presupuestos: {realBudgets.length} · Pagos: {realPayments.length} · Registros operativos: {operationalRecords.length}</p>
+          <p className="mt-2 text-xs text-slate-500">Indicadores calculados sobre los registros recuperados, no sobre la totalidad histórica cuando la consulta está limitada.</p>
+          <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);Promise.all([loadRealServices(accessToken,realCompanyId),loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId),loadOperationalRecords(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 rounded bg-[#173a3e] px-3 py-2 text-white">Actualizar indicadores</button>
+        </div>}
         {(activeView === 'servicios' || activeView === 'dashboard') && <div><h3 className="font-semibold">Expedientes reales — Supabase</h3>
         <p className="mt-1 text-[11px] text-slate-600">Área separada de los expedientes ficticios. Los registros nuevos se guardan en la base de datos de tu funeraria.</p>
         <form onSubmit={editingServiceId?saveServiceChanges:saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
