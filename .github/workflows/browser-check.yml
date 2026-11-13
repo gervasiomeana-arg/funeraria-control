@@ -1,4 +1,4 @@
-name: Prueba navegador Funeraria Control
+name: Pruebas Chromium Funeraria Control
 on:
   workflow_dispatch:
   push:
@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/browser-check.yml'
       - 'tests/browser-check.mjs'
+      - 'src/**'
+      - 'package.json'
+      - 'index.html'
   schedule:
     - cron: '0 12 * * 1'
 
@@ -15,24 +18,45 @@ permissions:
 jobs:
   browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Instalar Playwright
-        run: npm install --no-save --package-lock=false playwright@1.58.2
-      - name: Instalar Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Probar sitio publicado sin alterar datos
+      - name: Instalar dependencias y Playwright
+        run: |
+          npm install
+          npm install --no-save --package-lock=false playwright@1.58.2
+          npx playwright install --with-deps chromium
+      - name: Verificar TypeScript
+        run: npm run lint
+      - name: Compilar aplicación
+        run: npm run build
+      - name: Iniciar servidor local
+        run: |
+          npm run dev -- --port 3000 > /tmp/funeraria-vite.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/funeraria-vite.log
+          exit 1
+      - name: Probar versión del repositorio con Chromium
+        run: node tests/browser-check.mjs
+        env:
+          TARGET_URL: http://127.0.0.1:3000
+          REPORT_NAME: local
+      - name: Probar versión publicada con Chromium
+        if: success()
         run: node tests/browser-check.mjs
         env:
           TARGET_URL: https://funeraria-control.ai.studio
-      - name: Guardar informe y captura
+          REPORT_NAME: publicada
+      - name: Guardar informes y capturas
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: informe-navegador
+          name: informes-funeraria-chromium
           path: test-results/
           if-no-files-found: ignore
