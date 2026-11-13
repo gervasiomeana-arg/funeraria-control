@@ -83,7 +83,6 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   };
   const [serviceStageDrafts,setServiceStageDrafts] = useState<Record<string,string>>({});
   const [editingServiceId,setEditingServiceId] = useState('');
-  const [editingBudgetId,setEditingBudgetId] = useState('');
   const [budgetStatusDrafts,setBudgetStatusDrafts] = useState<Record<string,string>>({});
   const saveServiceChanges = async (event:React.FormEvent) => {
     event.preventDefault();
@@ -94,13 +93,13 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   };
   const changeBudgetStatus = async (id:string,status:string) => {
     setRealDataBusy(true);
-    try {await patchReal('budgets',id,{status});await loadRealBudgets(accessToken,realCompanyId);setMessage('Presupuesto actualizado.');}
-    catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
+    try {await patchReal('budgets',id,{status});await loadRealBudgets(accessToken,realCompanyId);setBudgetStatusDrafts(prev=>{const next={...prev};delete next[id];return next;});setMessage('Presupuesto actualizado.');}
+    catch(error){setBudgetStatusDrafts(prev=>{const next={...prev};delete next[id];return next;});setMessage(String(error));}finally{setRealDataBusy(false);}
   };
   const changeRealServiceStage = async (id:string,status:string) => {
     setRealDataBusy(true);
-    try {await patchReal('funeral_services',id,{status});await loadRealServices(accessToken,realCompanyId);setMessage('Etapa del expediente actualizada.');}
-    catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
+    try {await patchReal('funeral_services',id,{status});await loadRealServices(accessToken,realCompanyId);setServiceStageDrafts(prev=>{const next={...prev};delete next[id];return next;});setMessage('Etapa del expediente actualizada.');}
+    catch(error){setServiceStageDrafts(prev=>{const next={...prev};delete next[id];return next;});setMessage(String(error));}finally{setRealDataBusy(false);}
   };
   const saveOperationalRecord = async (event:React.FormEvent) => {
     event.preventDefault();
@@ -321,7 +320,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       if (loadResults[2].status === 'rejected') setRealPayments([]);
       if (loadResults[3].status === 'rejected') setOperationalRecords([]);
       setPassword('');
-      setMessage(loadErrors.length ? 'Sesión verificada, pero falló la consulta de datos reales. ' + loadErrors.join(' ') : 'Identidad y membresía verificadas en Supabase. Los datos reales se muestran por separado; los módulos operativos siguen en modo demostración.');
+      setMessage(loadErrors.length ? 'Sesión verificada, pero falló la consulta de datos reales. ' + loadErrors.join(' ') : 'Identidad y membresía verificadas en Supabase. Los registros consultados corresponden a la funeraria autorizada.');
     } catch (error) {
       setSignedIn(false);
       setAccessToken('');
@@ -404,7 +403,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         </form>
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
           <h3 className="font-semibold">Presupuestos reales</h3>
-          <p className="mt-1 text-slate-500">Registros de Supabase separados de los presupuestos de demostración.</p>
+          <p className="mt-1 text-slate-500">Presupuestos registrados en Supabase para esta funeraria.</p>
           {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-100 p-2"><span>{b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</span><select disabled={realDataBusy} value={budgetStatusDrafts[b.id]||b.status} onChange={event=>{setBudgetStatusDrafts(prev=>({...prev,[b.id]:event.target.value}));void changeBudgetStatus(b.id,event.target.value);}} className="rounded border p-2">{['draft','pending','approved','paid','cancelled'].map(status=><option key={status} value={status}>{status}</option>)}</select></li>)}</ul>}
           <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
@@ -442,7 +441,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button></div>}
       </section>}
       {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
-      <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Este panel verifica identidad y membresías; la gestión operativa permanece en modo demostración.</p>
+      <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Los registros reales se consultan y guardan en Supabase según los permisos de la funeraria.</p>
     </div>}
   </div>;
 };
