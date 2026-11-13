@@ -72,8 +72,8 @@ export const BudgetsView: React.FC = () => {
     setBudgetError('');
 
     const sub = calculateSubtotal();
-    const iva = (sub - discountAmount) * (ivaRate / 100);
-    const total = sub - discountAmount + iva;
+    const iva = Math.round((sub - discountAmount) * (ivaRate / 100) * 100) / 100;
+    const total = Math.round((sub - discountAmount + iva) * 100) / 100;
 
     createBudget({
       id: `bgt-${Date.now()}`,
@@ -102,7 +102,7 @@ export const BudgetsView: React.FC = () => {
     if (!selectedBudget) return;
     const paid = selectedBudget.payments.reduce((sum, payment) => sum + payment.amountMxn, 0);
     const outstanding = Math.max(0, selectedBudget.totalMxn - paid);
-    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || paymentAmount > outstanding) {
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || Math.round(paymentAmount * 100) !== paymentAmount * 100 || paymentAmount > outstanding + 0.000001) {
       setBudgetError('El abono debe ser mayor que cero y no puede superar el saldo pendiente.');
       return;
     }
