@@ -272,6 +272,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     const oauthToken = fragment.get('access_token');
     if (!oauthToken || fragment.get('type') === 'recovery') return;
+    const refreshToken = fragment.get('refresh_token');
+    if (refreshToken) sessionStorage.setItem('fc_refresh_token',refreshToken);
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     setBusy(true);
     setOpen(true);
@@ -301,6 +303,45 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       ]);
       setMessage(results.some(item=>item.status==='rejected')?'Google conectado. Algunos módulos no pudieron cargarse.':'Google conectado. Registros reales disponibles.');
     })().catch(error=>setMessage(error instanceof Error?error.message:'No se pudo iniciar sesión con Google.')).finally(()=>setBusy(false));
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash.includes('access_token=')) return;
+    const refreshToken = sessionStorage.getItem('fc_refresh_token');
+    if (!refreshToken) return;
+    let cancelled = false;
+    (async () => {
+      const response = await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=refresh_token',{
+        method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_token:refreshToken})
+      });
+      if (!response.ok) throw new Error('La sesión venció.');
+      const session = await response.json();
+      if (!session.access_token || !session.refresh_token) throw new Error('Sesión inválida.');
+      if (cancelled) return;
+      sessionStorage.setItem('fc_refresh_token',session.refresh_token);
+      const headers = {apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+session.access_token};
+      const identityResponse = await fetch(SUPABASE_URL+'/auth/v1/user',{headers});
+      if (!identityResponse.ok) throw new Error('Sesión no autorizada.');
+      const identity = await identityResponse.json();
+      const membershipsResponse = await fetch(SUPABASE_URL+'/rest/v1/company_memberships?select=company_id,role&active=eq.true',{headers});
+      if (!membershipsResponse.ok) throw new Error('No se pudo verificar la funeraria.');
+      const memberships: Array<{company_id:string;role:string}> = await membershipsResponse.json();
+      if (cancelled || !memberships.length) return;
+      const companyId = memberships[0].company_id;
+      setAccessToken(session.access_token);
+      setAuthenticatedUserId(identity.id);
+      setRealCompanyId(companyId);
+      setAuthorizedCompanies(memberships.map(item=>item.company_id+' ('+item.role+')'));
+      setSignedIn(true);
+      setOpen(true);
+      const results = await Promise.allSettled([
+        loadRealServices(session.access_token,companyId),loadRealBudgets(session.access_token,companyId),
+        loadRealPayments(session.access_token,companyId),loadOperationalRecords(session.access_token,companyId)
+      ]);
+      if (!cancelled) setMessage(results.some(item=>item.status==='rejected')?'Sesión restaurada; algunos datos no pudieron cargarse.':'Sesión restaurada.');
+    })().catch(()=>{sessionStorage.removeItem('fc_refresh_token');});
+    return ()=>{cancelled=true;};
   }, []);
 
   const connect = async (event: React.FormEvent) => {
@@ -482,7 +523,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span>{item.reference} · {item.deceased_name || 'Sin nombre'}{item.contact_name ? ' · Contacto: '+item.contact_name : ''}{item.notes ? ' · '+item.notes : ''}</span><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={realDataBusy} className="rounded border px-2 py-1 font-medium" onClick={()=>{setEditingServiceId(item.id);setRealReference(item.reference);setRealDeceasedName(item.deceased_name||'');setRealContactName(item.contact_name||'');setRealServiceNotes(item.notes||'');}}>Editar</button><select aria-label={'Etapa de '+item.reference} disabled={realDataBusy} value={serviceStageDrafts[item.id]||item.status} onChange={event=>{setServiceStageDrafts(prev=>({...prev,[item.id]:event.target.value}));void changeRealServiceStage(item.id,event.target.value);}} className="rounded border p-2">{Array.from(new Set([item.status,'nuevo','documentacion','preparacion','traslado','velacion','cremacion_inhumacion','finalizado'])).map(status=><option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></div></div>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button></div>}
       </section>}
-      {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
+      {signedIn && <button type="button" onClick={()=>{sessionStorage.removeItem('fc_refresh_token');setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
       <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Los registros reales se consultan y guardan en Supabase según los permisos de la funeraria.</p>
     </div>}
   </div>;
