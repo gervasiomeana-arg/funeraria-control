@@ -36,6 +36,33 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   const [accessToken, setAccessToken] = useState('');
   const [authenticatedUserId, setAuthenticatedUserId] = useState('');
+  // Keep the Google session valid during long operational shifts.
+  useEffect(() => {
+    if (!signedIn || !accessToken) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const saved = sessionStorage.getItem('fc_refresh_token');
+      if (!saved) return;
+      try {
+        const response = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST',
+          headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: saved })
+        });
+        if (!response.ok) throw new Error('No se pudo renovar la sesión.');
+        const next = await response.json();
+        if (cancelled) return;
+        if (!next.access_token || !next.refresh_token) throw new Error('Sesión inválida.');
+        sessionStorage.setItem('fc_refresh_token', next.refresh_token);
+        setAccessToken(next.access_token);
+      } catch {
+        if (!cancelled) setMessage('No se pudo renovar la sesión. Cerrá sesión y volvé a ingresar con Google antes de guardar cambios.');
+      }
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 40 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [signedIn, accessToken]);
+
   const [realServices, setRealServices] = useState<Array<{id:string;reference:string;status:string;deceased_name:string|null;contact_name:string|null;notes:string|null}>>([]);
   const [realReference, setRealReference] = useState('');
   const [realDeceasedName, setRealDeceasedName] = useState('');
@@ -523,8 +550,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span>{item.reference} · {item.deceased_name || 'Sin nombre'}{item.contact_name ? ' · Contacto: '+item.contact_name : ''}{item.notes ? ' · '+item.notes : ''}</span><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={realDataBusy} className="rounded border px-2 py-1 font-medium" onClick={()=>{setEditingServiceId(item.id);setRealReference(item.reference);setRealDeceasedName(item.deceased_name||'');setRealContactName(item.contact_name||'');setRealServiceNotes(item.notes||'');}}>Editar</button><select aria-label={'Etapa de '+item.reference} disabled={realDataBusy} value={serviceStageDrafts[item.id]||item.status} onChange={event=>{setServiceStageDrafts(prev=>({...prev,[item.id]:event.target.value}));void changeRealServiceStage(item.id,event.target.value);}} className="rounded border p-2">{Array.from(new Set([item.status,'nuevo','documentacion','preparacion','traslado','velacion','cremacion_inhumacion','finalizado'])).map(status=><option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></div></div>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button></div>}
       </section>}
-      {signedIn && <button type="button" onClick={()=>{sessionStorage.removeItem('fc_refresh_token');setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
-      <p className="mt-3 text-[11px] text-slate-500">La sesión no se guarda en este dispositivo. Los registros reales se consultan y guardan en Supabase según los permisos de la funeraria.</p>
+      {signedIn && <button type="button" onClick={()=>{void fetch(SUPABASE_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken}}).catch(()=>{});sessionStorage.removeItem('fc_refresh_token');setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Sesión cerrada en este dispositivo.');}} className="mt-3 underline">Cerrar sesión</button>}
+      <p className="mt-3 text-[11px] text-slate-500">La sesión de Google se conserva durante esta pestaña y se renueva automáticamente. Los registros se consultan y guardan en Supabase según los permisos de la funeraria.</p>
     </div>}
   </div>;
 };
