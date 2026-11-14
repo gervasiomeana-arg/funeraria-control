@@ -1,18 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { AppProvider, useApp } from './context/AppContext';
-import { Header } from './components/common/Header';
-import { Sidebar } from './components/common/Sidebar';
-import { DemoBanner } from './components/common/DemoBanner';
-import { DashboardView } from './components/dashboard/DashboardView';
-import { ServicesView } from './components/services/ServicesView';
-import { ScheduleView } from './components/schedule/ScheduleView';
-import { FamilyPortalView } from './components/family/FamilyPortalView';
-import { BudgetsView } from './components/budgets/BudgetsView';
-import { InventoryView } from './components/inventory/InventoryView';
-import { ResourcesView } from './components/resources/ResourcesView';
-import { ReportsView } from './components/reports/ReportsView';
-import { AdminView } from './components/admin/AdminView';
-import { AIAssistantModal } from './components/ai/AIAssistantModal';
 
 
 // Public browser key only. No service-role credentials or database passwords.
@@ -349,7 +335,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   </div>;
   return <div className="border-b border-[#d9e4df] bg-[#eef4f0] px-4 py-2 text-xs text-[#31564e]">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-      <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Datos demo preservados</span>
+      <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Sin datos ficticios</span>
       <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} className="rounded-lg border border-[#c5d8cf] px-3 py-1.5 font-semibold hover:bg-white">{open ? 'Cerrar conexión' : 'Conectar cuenta'}</button>
     </div>
     {open && <div className="mx-auto mt-3 max-w-7xl rounded-xl border border-[#c5d8cf] bg-white p-4">
@@ -379,7 +365,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);Promise.all([loadRealServices(accessToken,realCompanyId),loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId),loadOperationalRecords(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 rounded bg-[#173a3e] px-3 py-2 text-white">Actualizar indicadores</button>
         </div>}
         {(activeView === 'servicios' || activeView === 'dashboard') && <div><h3 className="font-semibold">Expedientes reales — Supabase</h3>
-        <p className="mt-1 text-[11px] text-slate-600">Área separada de los expedientes ficticios. Los registros nuevos se guardan en la base de datos de tu funeraria.</p>
+        <p className="mt-1 text-[11px] text-slate-600">Los registros se guardan en la base de datos de la funeraria autenticada.</p>
         <form onSubmit={editingServiceId?saveServiceChanges:saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">Folio<input required maxLength={80} value={realReference} onChange={event=>setRealReference(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
@@ -446,60 +432,41 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   </div>;
 };
 
+const MAIN_MODULES = [
+  ['dashboard', 'Inicio'], ['servicios', 'Servicios'], ['agenda', 'Agenda'],
+  ['familias', 'Familias'], ['presupuestos', 'Presupuestos'], ['inventario', 'Inventario'],
+  ['recursos', 'Personal y recursos'], ['reportes', 'Reportes'], ['admin', 'Administración'],
+] as const;
+
 const MainLayout: React.FC = () => {
-  const { currentView, toastMessage } = useApp();
-  const [realMode, setRealMode] = useState(false);
-
+  const [currentView, setCurrentView] = useState<(typeof MAIN_MODULES)[number][0]>('dashboard');
+  const [authenticated, setAuthenticated] = useState(false);
   return (
-    <div className="fc-premium-shell min-h-screen flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
-      {/* Top Bar Navigation */}
-      <Header />
-
-
-
-      {/* La versión operativa no muestra registros ficticios. */}
-
-      {/* Main Body with Sidebar + Content */}
-      <div className="flex-1 flex flex-col md:flex-row">
-        {/* Sidebar Navigation */}
-        <Sidebar />
-
-        {/* Content Viewport */}
-        <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
-          <SupabaseConnectionPanel onAuthChange={setRealMode} activeView={currentView} />
-          {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa: elegí un módulo en el menú para gestionar sus registros Supabase desde el área de conexión superior.</p>}
-          {false && <>
-          {currentView === 'dashboard' && <DashboardView />}
-          {currentView === 'servicios' && <ServicesView />}
-          {currentView === 'agenda' && <ScheduleView />}
-          {currentView === 'familias' && <FamilyPortalView />}
-          {currentView === 'presupuestos' && <BudgetsView />}
-          {currentView === 'inventario' && <InventoryView />}
-          {currentView === 'recursos' && <ResourcesView />}
-          {currentView === 'reportes' && <ReportsView />}
-          {currentView === 'admin' && <AdminView />}
-          </>}
+    <div className="fc-premium-shell min-h-screen bg-[#f4f6f3] text-[#17353b]">
+      <header className="fc-premium-header px-4 py-5 md:px-8">
+        <h1 className="text-xl font-semibold tracking-wide">FUNERARIA CONTROL</h1>
+        <p className="mt-1 text-xs text-slate-300">Gestión que acompaña cada momento · Datos protegidos por Supabase</p>
+      </header>
+      <div className="flex min-h-[calc(100vh-92px)] flex-col md:flex-row">
+        <nav aria-label="Módulos de gestión" className="fc-premium-sidebar flex shrink-0 flex-row flex-wrap gap-1 p-3 md:w-60 md:flex-col">
+          {MAIN_MODULES.map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setCurrentView(key)}
+              aria-current={currentView === key ? 'page' : undefined}
+              className={`rounded-lg px-3 py-2 text-left text-sm ${currentView === key ? 'bg-amber-100 font-semibold text-[#17353b]' : 'text-slate-200 hover:bg-white/10'}`}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <main className="fc-premium-main mx-auto w-full min-w-0 max-w-7xl flex-1 p-4 md:p-8">
+          <h2 className="mb-4 text-xl font-semibold">{MAIN_MODULES.find(([key]) => key === currentView)?.[1]}</h2>
+          <SupabaseConnectionPanel activeView={currentView} onAuthChange={setAuthenticated} />
+          {!authenticated && <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Iniciá sesión con una cuenta autorizada para acceder a los registros de tu funeraria. No se muestran datos ficticios.</p>}
         </main>
       </div>
-
-      {/* Global AI Assistant Modal */}
-      <AIAssistantModal />
-
-      {/* Toast Feedback */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white border border-slate-700 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium flex items-center gap-2 animate-fade-in">
-          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
     </div>
   );
 };
 
 export default function App() {
-  return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
-  );
+  return <MainLayout />;
 }
