@@ -9,6 +9,20 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [open, setOpen] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const signInWithGoogle = () => {
+    const redirectTo = window.location.origin + window.location.pathname;
+    window.location.assign(SUPABASE_URL + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(redirectTo));
+  };
+  const [loginHistoryMessage, setLoginHistoryMessage] = useState('');
+  const recordLoginVisit = async (token:string, userId:string) => {
+    const response = await fetch(SUPABASE_URL+'/rest/v1/login_visits',{
+      method:'POST',
+      headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:userId})
+    });
+    setLoginHistoryMessage(response.ok ? 'Ingreso registrado.' : 'No se pudo registrar el ingreso.');
+  };
+
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Iniciá sesión para gestionar registros reales de tu funeraria en Supabase.');
   const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
@@ -254,6 +268,41 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar la contraseña.'); }
     finally { setBusy(false); }
   };
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const oauthToken = fragment.get('access_token');
+    if (!oauthToken || fragment.get('type') === 'recovery') return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setBusy(true);
+    setOpen(true);
+    (async () => {
+      const headers = {apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+oauthToken};
+      const identityResponse = await fetch(SUPABASE_URL+'/auth/v1/user',{headers});
+      if (!identityResponse.ok) throw new Error('Google no pudo verificar tu identidad.');
+      const identity = await identityResponse.json();
+      if (!identity?.id) throw new Error('Identidad de Google inválida.');
+      await recordLoginVisit(oauthToken,identity.id);
+      const membershipResponse = await fetch(SUPABASE_URL+'/rest/v1/company_memberships?select=company_id,role&active=eq.true',{headers});
+      if (!membershipResponse.ok) throw new Error('No se pudieron consultar los permisos.');
+      const memberships: Array<{company_id:string;role:string}> = await membershipResponse.json();
+      if (!memberships.length) {
+        setMessage('Tu ingreso con Google quedó registrado. Para gestionar una funeraria, un administrador debe asignarte acceso. No se permite consultar datos de otras empresas.');
+        return;
+      }
+      const companyId = memberships[0].company_id;
+      setAuthorizedCompanies(memberships.map(item=>item.company_id+' ('+item.role+')'));
+      setAccessToken(oauthToken);
+      setAuthenticatedUserId(identity.id);
+      setRealCompanyId(companyId);
+      setSignedIn(true);
+      const results = await Promise.allSettled([
+        loadRealServices(oauthToken,companyId),loadRealBudgets(oauthToken,companyId),
+        loadRealPayments(oauthToken,companyId),loadOperationalRecords(oauthToken,companyId)
+      ]);
+      setMessage(results.some(item=>item.status==='rejected')?'Google conectado. Algunos módulos no pudieron cargarse.':'Google conectado. Registros reales disponibles.');
+    })().catch(error=>setMessage(error instanceof Error?error.message:'No se pudo iniciar sesión con Google.')).finally(()=>setBusy(false));
+  }, []);
+
   const connect = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -340,7 +389,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   return <div className="border-b border-[#d9e4df] bg-[#eef4f0] px-4 py-2 text-xs text-[#31564e]">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
       <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Sin datos ficticios</span>
-      <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} className="rounded-lg border border-[#c5d8cf] px-3 py-1.5 font-semibold hover:bg-white">{open ? 'Cerrar conexión' : 'Conectar cuenta'}</button>
+      <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} className="rounded-lg border border-[#c5d8cf] px-3 py-1.5 font-semibold hover:bg-white">{open ? 'Cerrar conexión' : 'Ingresar con Google'}</button>
     </div>
     {open && <div className="mx-auto mt-3 max-w-7xl rounded-xl border border-[#c5d8cf] bg-white p-4">
       <p className="mb-3 font-medium">Acceso seguro a Funeraria Control — Supabase</p>
@@ -348,7 +397,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <label className="flex min-w-60 flex-col gap-1">Nueva contraseña (mínimo 12 caracteres)<input required type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event=>setNewPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Establecer contraseña'}</button>
       </form>}
-      {!signedIn && !recoveryMode && <form onSubmit={connect} className="flex flex-wrap items-end gap-2">
+      {!signedIn && !recoveryMode && <div className="mb-3"><button type="button" disabled={busy} onClick={signInWithGoogle} className="rounded-lg bg-[#173a3e] px-5 py-3 font-semibold text-white disabled:opacity-50">Ingresar con Google</button><p className="mt-2 text-xs text-slate-600">Sin contraseña de Funeraria Control. El ingreso se registra; el acceso a los datos requiere autorización de la funeraria.</p>{loginHistoryMessage && <p>{loginHistoryMessage}</p>}</div>}
+      {false && !signedIn && !recoveryMode && <form onSubmit={connect} className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-48 flex-col gap-1">Correo electrónico<input required type="email" autoComplete="username" value={email} onChange={event=>setEmail(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <label className="flex min-w-48 flex-col gap-1">Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
