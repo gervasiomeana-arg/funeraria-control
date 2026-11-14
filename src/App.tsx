@@ -20,11 +20,11 @@ const SUPABASE_URL = 'https://vfqiudqoerfnmnkwugie.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_tR95J4J1ZQP0XpvoOUtEDA_guyXCWEm';
 
 const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean) => void; activeView?: string }> = ({onAuthChange, activeView}) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('Modo demostración: los expedientes todavía no se guardan en Supabase.');
+  const [message, setMessage] = useState('Iniciá sesión para gestionar registros reales de tu funeraria en Supabase.');
   const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
   const [signedIn, setSignedIn] = useState(false);
   useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
@@ -66,7 +66,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   };
   const [operationalRecords, setOperationalRecords] = useState<Array<{id:string;module:string;title:string;details:Record<string,unknown>;created_at:string}>>([]);
   const loadOperationalRecords = async (token:string, companyId:string) => {
-    const response = await fetch(SUPABASE_URL+'/rest/v1/operational_records?select=id,module,title,details,created_at&company_id=eq.'+encodeURIComponent(companyId)+'&order=created_at.desc&limit=200',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
+    const response = await fetch(SUPABASE_URL+'/rest/v1/operational_records?select=id,module,title,details,created_at&company_id=eq.'+encodeURIComponent(companyId)+'&order=created_at.desc&limit=10000',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
     if (!response.ok) throw new Error('No se pudieron consultar los módulos operativos (HTTP '+response.status+').');
     const rows = await response.json();
     if (!Array.isArray(rows)) throw new Error('Respuesta inválida de módulos.');
@@ -128,7 +128,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     }
   };
   const loadRealPayments = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/budget_payments?select=id,budget_id,amount_mxn,method,reference&company_id=eq.' + encodeURIComponent(companyId) + '&limit=200', {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/budget_payments?select=id,budget_id,amount_mxn,method,reference&company_id=eq.' + encodeURIComponent(companyId) + '&limit=1000', {
       headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
     });
     if (!response.ok) throw new Error('No se pudieron consultar los pagos reales (HTTP ' + response.status + ').');
@@ -174,7 +174,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     finally { setRealDataBusy(false); }
   };
   const loadRealBudgets = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/budgets?select=id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status&company_id=eq.' + encodeURIComponent(companyId) + '&limit=30', {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/budgets?select=id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status&company_id=eq.' + encodeURIComponent(companyId) + '&limit=1000', {
       headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
     });
     if (!response.ok) throw new Error('No se pudieron consultar presupuestos reales (HTTP ' + response.status + ').');
@@ -457,8 +457,7 @@ const MainLayout: React.FC = () => {
 
 
 
-      {/* Demo Banner */}
-      {!realMode && <DemoBanner />}
+      {/* La versión operativa no muestra registros ficticios. */}
 
       {/* Main Body with Sidebar + Content */}
       <div className="flex-1 flex flex-col md:flex-row">
@@ -469,7 +468,7 @@ const MainLayout: React.FC = () => {
         <main className="fc-premium-main flex-1 p-4 md:p-8 mx-auto w-full overflow-x-hidden">
           <SupabaseConnectionPanel onAuthChange={setRealMode} activeView={currentView} />
           {realMode && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Sesión real activa: elegí un módulo en el menú para gestionar sus registros Supabase desde el área de conexión superior.</p>}
-          {!realMode && <>
+          {false && <>
           {currentView === 'dashboard' && <DashboardView />}
           {currentView === 'servicios' && <ServicesView />}
           {currentView === 'agenda' && <ScheduleView />}
