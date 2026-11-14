@@ -22,9 +22,11 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   const [accessToken, setAccessToken] = useState('');
   const [authenticatedUserId, setAuthenticatedUserId] = useState('');
-  const [realServices, setRealServices] = useState<Array<{id:string;reference:string;status:string;deceased_name:string|null}>>([]);
+  const [realServices, setRealServices] = useState<Array<{id:string;reference:string;status:string;deceased_name:string|null;contact_name:string|null;notes:string|null}>>([]);
   const [realReference, setRealReference] = useState('');
   const [realDeceasedName, setRealDeceasedName] = useState('');
+  const [realContactName, setRealContactName] = useState('');
+  const [realServiceNotes, setRealServiceNotes] = useState('');
   const [realCompanyId, setRealCompanyId] = useState('');
   const [realDataBusy, setRealDataBusy] = useState(false);
   const [realBudgets, setRealBudgets] = useState<Array<{id:string;service_id:string;subtotal_mxn:number;discount_mxn:number;tax_mxn:number;status:string}>>([]);
@@ -74,7 +76,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     event.preventDefault();
     if (!editingServiceId) return;
     setRealDataBusy(true);
-    try {await patchReal('funeral_services',editingServiceId,{reference:realReference.trim(),deceased_name:realDeceasedName.trim()});await loadRealServices(accessToken,realCompanyId);setEditingServiceId('');setRealReference('');setRealDeceasedName('');setMessage('Expediente actualizado.');}
+    try {await patchReal('funeral_services',editingServiceId,{reference:realReference.trim(),deceased_name:realDeceasedName.trim(),contact_name:realContactName.trim(),notes:realServiceNotes.trim()});await loadRealServices(accessToken,realCompanyId);setEditingServiceId('');setRealReference('');setRealDeceasedName('');setRealContactName('');setRealServiceNotes('');setMessage('Expediente actualizado.');}
     catch(error){setMessage(String(error));}finally{setRealDataBusy(false);}
   };
   const changeBudgetStatus = async (id:string,status:string) => {
@@ -170,7 +172,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   };
 
   const loadRealServices = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services?select=id,reference,status,deceased_name&company_id=eq.' + encodeURIComponent(companyId) + '&order=created_at.desc&limit=20', {
+    const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services?select=id,reference,status,deceased_name,contact_name,notes&company_id=eq.' + encodeURIComponent(companyId) + '&order=created_at.desc&limit=20', {
       headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
     });
     if (!response.ok) throw new Error('No se pudieron consultar los expedientes reales (HTTP ' + response.status + ').');
@@ -186,7 +188,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services', {
         method: 'POST',
         headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type':'application/json', Prefer:'return=minimal'},
-        body: JSON.stringify({company_id:realCompanyId,reference:realReference.trim(),deceased_name:realDeceasedName.trim(),status:'nuevo',created_by:authenticatedUserId})
+        body: JSON.stringify({company_id:realCompanyId,reference:realReference.trim(),deceased_name:realDeceasedName.trim(),contact_name:realContactName.trim(),notes:realServiceNotes.trim(),status:'nuevo',created_by:authenticatedUserId})
       });
       if (!response.ok) {
         const details = await response.json().catch(() => ({}));
@@ -194,6 +196,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       }
       setRealReference('');
       setRealDeceasedName('');
+      setRealContactName('');
+      setRealServiceNotes('');
       await loadRealServices(accessToken,realCompanyId);
       setMessage('Expediente real guardado y recuperado de Supabase.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar.'); }
@@ -369,7 +373,9 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <form onSubmit={editingServiceId?saveServiceChanges:saveRealService} className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">Folio<input required maxLength={80} value={realReference} onChange={event=>setRealReference(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
           <label className="flex min-w-52 flex-col gap-1">Nombre del fallecido<input required maxLength={160} value={realDeceasedName} onChange={event=>setRealDeceasedName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
-          <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':editingServiceId?'Guardar cambios':'Guardar en Supabase'}</button>{editingServiceId && <button type="button" className="rounded border px-4 py-2" onClick={()=>{setEditingServiceId('');setRealReference('');setRealDeceasedName('');}}>Cancelar edición</button>}
+          <label className="flex min-w-52 flex-col gap-1">Contacto familiar<input maxLength={160} value={realContactName} onChange={event=>setRealContactName(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
+          <label className="flex min-w-52 flex-col gap-1">Observaciones<input maxLength={1000} value={realServiceNotes} onChange={event=>setRealServiceNotes(event.target.value)} className="rounded-lg border border-slate-300 p-2"/></label>
+          <button type="submit" disabled={realDataBusy} className="rounded-lg bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{realDataBusy?'Guardando…':editingServiceId?'Guardar cambios':'Guardar en Supabase'}</button>{editingServiceId && <button type="button" className="rounded border px-4 py-2" onClick={()=>{setEditingServiceId('');setRealReference('');setRealDeceasedName('');setRealContactName('');setRealServiceNotes('');}}>Cancelar edición</button>}
         </form>
         </div>}
         {(activeView === 'presupuestos' || activeView === 'dashboard') && <div><form onSubmit={saveRealBudget} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
@@ -423,7 +429,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
           <button type="submit" disabled={realDataBusy || realBudgets.length===0} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Registrar abono real</button>
         </form>}
         {(activeView === 'servicios' || activeView === 'dashboard') && <div>
-        <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span>{item.reference} · {item.deceased_name || 'Sin nombre'}</span><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={realDataBusy} className="rounded border px-2 py-1 font-medium" onClick={()=>{setEditingServiceId(item.id);setRealReference(item.reference);setRealDeceasedName(item.deceased_name||'');}}>Editar</button><select aria-label={'Etapa de '+item.reference} disabled={realDataBusy} value={serviceStageDrafts[item.id]||item.status} onChange={event=>{setServiceStageDrafts(prev=>({...prev,[item.id]:event.target.value}));void changeRealServiceStage(item.id,event.target.value);}} className="rounded border p-2">{Array.from(new Set([item.status,'nuevo','documentacion','preparacion','traslado','velacion','cremacion_inhumacion','finalizado'])).map(status=><option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></div></div>)}</div>
+        <div className="mt-3 space-y-1">{realServices.length===0?<p className="text-slate-500">Todavía no hay expedientes reales.</p>:realServices.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><span>{item.reference} · {item.deceased_name || 'Sin nombre'}{item.contact_name ? ' · Contacto: '+item.contact_name : ''}{item.notes ? ' · '+item.notes : ''}</span><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={realDataBusy} className="rounded border px-2 py-1 font-medium" onClick={()=>{setEditingServiceId(item.id);setRealReference(item.reference);setRealDeceasedName(item.deceased_name||'');setRealContactName(item.contact_name||'');setRealServiceNotes(item.notes||'');}}>Editar</button><select aria-label={'Etapa de '+item.reference} disabled={realDataBusy} value={serviceStageDrafts[item.id]||item.status} onChange={event=>{setServiceStageDrafts(prev=>({...prev,[item.id]:event.target.value}));void changeRealServiceStage(item.id,event.target.value);}} className="rounded border p-2">{Array.from(new Set([item.status,'nuevo','documentacion','preparacion','traslado','velacion','cremacion_inhumacion','finalizado'])).map(status=><option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></div></div>)}</div>
         <button type="button" onClick={()=>{setRealDataBusy(true);loadRealServices(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} disabled={realDataBusy} className="mt-3 text-xs font-semibold underline">Actualizar expedientes reales</button></div>}
       </section>}
       {signedIn && <button type="button" onClick={()=>{setSignedIn(false);setAccessToken('');setAuthenticatedUserId('');setRealCompanyId('');setRealServices([]);setRealBudgets([]);setRealPayments([]);setOperationalRecords([]);setAuthorizedCompanies([]);setMessage('Verificación local finalizada. No se guardó una sesión persistente.');}} className="mt-3 underline">Cerrar sesión local</button>}
