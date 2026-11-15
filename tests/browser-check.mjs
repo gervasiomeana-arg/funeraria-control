@@ -37,6 +37,12 @@ try {
     } catch (e) { item.error = e instanceof Error ? e.message : String(e); }
     result.modules.push(item);
   }
+  if (reportName === 'local') {
+    await page.goto(url.replace(/\/$/, '') + '/#family=00000000-0000-4000-8000-000000000099', {waitUntil:'domcontentloaded'});
+    await page.getByText('El enlace es inválido, está vencido o fue revocado.', {exact:true}).waitFor({timeout:15000});
+    if (await page.getByRole('heading', {name:'Libro de condolencias',exact:true}).count()) throw new Error('Un enlace inválido mostró el formulario familiar.');
+    result.notes.push('Portal familiar: código inválido rechazado, sin formulario ni datos de expediente.');
+  }
   result.notes.push('Prueba pública sin credenciales: navegación de 9 módulos; no verifica sesiones privadas ni transacciones.');
   if (result.readiness.demoMode) result.notes.push('NO APTO PARA PRODUCCION: la interfaz sigue indicando modo demostración; no certificar datos ni operaciones reales.');
   result.readiness.productionReady = false;

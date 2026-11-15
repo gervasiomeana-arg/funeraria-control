@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { OperationalWorkspace } from './OperationalWorkspace';
 import { operationalError, balanceFor, currency } from './domain';
 import { ServiceEvidence } from './ServiceEvidence';
+import { FamilyAccess, PublicFamilyPortal } from './FamilyAccess';
 import { OperationalHistory } from './OperationalHistory';
 
 
@@ -469,6 +470,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
         {activeView==='inventario' && <OperationalHistory records={operationalRecords} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
+        {activeView==='familias' && ['owner','manager'].includes(membershipRole) && <FamilyAccess services={realServices} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         <OperationalWorkspace view={activeView||'dashboard'} services={realServices} budgets={realBudgets} payments={realPayments} records={operationalRecords} onEdit={item=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}} />
         {activeView==='servicios' && <ServiceEvidence services={realServices} token={accessToken} companyId={realCompanyId} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         {activeView==='dashboard' && <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -588,6 +590,10 @@ const MainLayout: React.FC = () => {
 };
 
 export default function App() {
+  const [hash,setHash]=useState(window.location.hash);
+  useEffect(()=>{const changed=()=>setHash(window.location.hash);window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[]);
+  const code=new URLSearchParams(hash.slice(1)).get('family');
+  if(code)return <PublicFamilyPortal code={code} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />;
   return <MainLayout />;
 }
 

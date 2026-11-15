@@ -25,6 +25,10 @@ La documentación es una lista de recepción y revisión, no un almacenamiento d
 
 Después de actualizar GitHub, sincronizar la versión en AI Studio y publicar. Verificar la interfaz publicada antes de declarar terminada la validación de los nueve módulos.
 
-## Portal familiar pendiente de autorización
+## Portal familiar autorizado
 
-`proposals/` contiene una propuesta no conectada a la aplicación ni aplicada a Supabase. Habilitarla permitiría a terceros con un enlace consultar el nombre del fallecido, horarios y condolencias durante siete días, con revocación. No expone observaciones internas ni documentos. Su habilitación requiere autorización expresa para compartir esos datos fuera de una sesión autenticada. No ejecutar los SQL de `proposals/` como parte de las migraciones aprobadas.
+El propietario autorizó expresamente compartir nombre del fallecido, horarios y condolencias con quienes reciban un enlace privado, sin sesión. La migración `authorized_expiring_family_portal` está aplicada. Los enlaces tienen siete días de vigencia, pueden revocarse y se guardan en la base solo como hash. Las observaciones internas y la documentación no forman parte de la respuesta pública. Solo owner/manager puede generar o revocar enlaces. No se envían automáticamente a ninguna persona.
+
+Los RPC públicos tienen acceso limitado a un único portal mediante el código. Los visitantes no pueden consultar directamente las tablas. Nunca insertar una clave de servicio en la aplicación.
+
+Los avisos del asesor sobre funciones SECURITY DEFINER públicas son intencionales para estos dos RPC de acceso por código: cada llamada valida hash, habilitación y vencimiento y devuelve solo los campos autorizados. No se conceden políticas de lectura anónima sobre las tablas. family_condolences carece de políticas a propósito: solo esos RPC acceden a ella. Se probaron tanto el acceso directo denegado como los códigos inválidos, vencidos y revocados. No cambiar esas funciones por una lectura anónima general de tablas.

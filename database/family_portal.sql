@@ -26,7 +26,7 @@ begin
  if length(access_code)<>36 then return null; end if;
  select * into portal from public.family_portals where code_hash=encode(sha256(convert_to(access_code,'UTF8')),'hex') and enabled and expires_at>now();
  if not found then return null; end if;
- select jsonb_build_object('name',s.deceased_name,'reference',s.reference,
+ select jsonb_build_object('name',s.deceased_name,
    'schedule',coalesce((select jsonb_agg(jsonb_build_object('date',r.details->>'date','time',r.details->>'time','end_time',r.details->>'end_time')) from public.operational_records r where r.company_id=portal.company_id and r.module='agenda' and r.details->>'service'=s.reference),'[]'::jsonb),
    'condolences',coalesce((select jsonb_agg(jsonb_build_object('author',c.author,'message',c.message,'candle',c.candle,'created_at',c.created_at)) from (select * from public.family_condolences where portal_id=portal.id order by created_at desc limit 100) c),'[]'::jsonb)) into result
  from public.funeral_services s where s.id=portal.service_id and s.company_id=portal.company_id;
@@ -48,3 +48,5 @@ begin
 end $$;
 revoke all on function public.fc_family_condolence(text,text,text,boolean) from public;
 grant execute on function public.fc_family_condolence(text,text,text,boolean) to anon,authenticated;
+
+alter table public.family_portals add constraint family_portal_max_lifetime check (expires_at <= now()+interval '7 days');
