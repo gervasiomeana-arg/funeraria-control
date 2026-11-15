@@ -3,6 +3,7 @@ import { OperationalWorkspace } from './OperationalWorkspace';
 import { operationalError, balanceFor, currency } from './domain';
 import { ServiceEvidence } from './ServiceEvidence';
 import { FamilyAccess, PublicFamilyPortal } from './FamilyAccess';
+import { AdminUsersPanel } from './AdminUsersPanel';
 import { OperationalHistory } from './OperationalHistory';
 
 
@@ -19,19 +20,20 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     window.location.assign(SUPABASE_URL + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(redirectTo));
   };
   const [loginHistoryMessage, setLoginHistoryMessage] = useState('');
-  const recordLoginVisit = async (token:string, userId:string) => {
-    const response = await fetch(SUPABASE_URL+'/rest/v1/login_visits',{
-      method:'POST',
-      headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
-      body:JSON.stringify({user_id:userId})
+  const recordLoginVisit = async (token:string, _userId:string) => {
+    const response = await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_register_google_user',{
+      method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'
     });
-    setLoginHistoryMessage(response.ok ? 'Ingreso registrado.' : 'No se pudo registrar el ingreso.');
+    if (!response.ok) throw new Error('Ingresá con Google para registrar y habilitar tu sesión.');
+    setLoginHistoryMessage('Ingreso registrado.');
   };
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Iniciá sesión para gestionar registros reales de tu funeraria en Supabase.');
   const [authorizedCompanies, setAuthorizedCompanies] = useState<string[]>([]);
   const [signedIn, setSignedIn] = useState(false);
+  const [adminUnlocked,setAdminUnlocked]=useState(false);
+  useEffect(()=>{setAdminUnlocked(false);},[activeView,signedIn]);
   useEffect(() => { onAuthChange?.(signedIn); }, [signedIn, onAuthChange]);
   useEffect(() => { if (signedIn) setOpen(true); }, [signedIn]);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -116,7 +118,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     const response = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(id)+'&company_id=eq.'+encodeURIComponent(realCompanyId),{
       method:'PATCH',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error('Error al actualizar: HTTP '+response.status);
+    if (!response.ok) {const error=await response.json().catch(()=>({}));throw new Error(error.message||'No se pudo actualizar el registro.');}
     const rows = await response.json();
     if (!Array.isArray(rows)||rows.length!==1) throw new Error('No se actualizó el registro. Revisá permisos.');
   };
@@ -306,6 +308,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const membershipResponse = await fetch(SUPABASE_URL+'/rest/v1/company_memberships?select=company_id,role&active=eq.true',{headers});
       if (!membershipResponse.ok) throw new Error('No se pudieron consultar los permisos.');
       const memberships: Array<{company_id:string;role:string}> = await membershipResponse.json();
+      setAccessToken(oauthToken);setAuthenticatedUserId(identity.id);setSignedIn(true);
       if (!memberships.length) {
         setMessage('Tu ingreso con Google quedó registrado. Para gestionar una funeraria, un administrador debe asignarte acceso. No se permite consultar datos de otras empresas.');
         return;
@@ -347,7 +350,11 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const membershipsResponse = await fetch(SUPABASE_URL+'/rest/v1/company_memberships?select=company_id,role&active=eq.true',{headers});
       if (!membershipsResponse.ok) throw new Error('No se pudo verificar la funeraria.');
       const memberships: Array<{company_id:string;role:string}> = await membershipsResponse.json();
-      if (cancelled || !memberships.length) return;
+      if (cancelled) return;
+      await recordLoginVisit(session.access_token,identity.id);
+      if (cancelled) return;
+      setAccessToken(session.access_token);setAuthenticatedUserId(identity.id);setSignedIn(true);
+      if (!memberships.length) {setMessage('Tu cuenta de Google quedó registrada. El administrador debe habilitar el acceso a tu funeraria.');return;}
       const companyId = memberships[0].company_id;
       setMembershipRole(memberships[0].role);
       setAccessToken(session.access_token);
@@ -465,10 +472,12 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <label className="flex min-w-48 flex-col gap-1">Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} className="rounded-lg border border-slate-300 p-2 text-sm"/></label>
         <button disabled={busy} type="submit" className="rounded-lg bg-[#173a3e] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
       </form>}
-      {!signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
+      {false && !signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
-      {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
+      {signedIn && activeView==='admin' && <AdminUsersPanel url={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} token={accessToken} onUnlock={()=>setAdminUnlocked(true)} onLock={()=>setAdminUnlocked(false)}/> }
+      {signedIn && !realCompanyId && <p className="mt-4 rounded border p-4">Tu cuenta quedó registrada. La habilitación de tu funeraria está pendiente.</p>}
+      {signedIn && realCompanyId && (activeView!=='admin'||adminUnlocked) && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
         {activeView==='inventario' && <OperationalHistory records={operationalRecords} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         {activeView==='familias' && ['owner','manager'].includes(membershipRole) && <FamilyAccess services={realServices} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         <OperationalWorkspace view={activeView||'dashboard'} services={realServices} budgets={realBudgets} payments={realPayments} records={operationalRecords} onEdit={item=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}} />
