@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   browser-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
           node-version: '22'
       - name: Instalar dependencias y Playwright
         run: |
-          npm install
+          npm ci
           npm install --no-save --package-lock=false playwright@1.58.2
           npx playwright install --with-deps chromium
       - name: Verificar TypeScript
@@ -60,3 +60,4 @@ jobs:
           name: informes-funeraria-chromium
           path: test-results/
           if-no-files-found: ignore
+
