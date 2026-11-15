@@ -22,9 +22,9 @@ try {
   result.readiness.demoMode = await page.getByText('Modo Demostración Operativa', { exact: false }).count() > 0;
   result.readiness.realServicesVisible = await page.getByText('Expedientes reales', { exact: false }).count() > 0;
   result.readiness.realBudgetsReadOnly = await page.getByText('Presupuestos reales (solo lectura)', { exact: false }).count() > 0;
-  const modules = ['1. Inicio', '2. Servicios', '3. Agenda', '4. Familias', '5. Presupuestos', '6. Inventario', '7. Personal y recursos', '8. Reportes', '9. Administración'];
+  const modules = ['Inicio', 'Servicios', 'Agenda', 'Familias', 'Presupuestos', 'Inventario', 'Personal y recursos', 'Reportes', 'Administración'];
   for (const moduleName of modules) {
-    const nav = page.locator('aside nav button').filter({ hasText: moduleName });
+    const nav = page.getByRole('navigation', {name:'Módulos de gestión'}).getByRole('button', {name:moduleName,exact:true});
     const item = { name: moduleName, visible: false, clicked: false, bodyHasContent: false, error: null };
     try {
       item.visible = await nav.isVisible();
@@ -51,3 +51,4 @@ try {
   console.log(JSON.stringify(result, null, 2));
 }
 if (result.status !== 'passed') process.exitCode = 1;
+

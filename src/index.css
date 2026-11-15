@@ -64,3 +64,6 @@ body { background:var(--fc-ivory); color:var(--fc-ink); font-family:'Plus Jakart
 .fc-premium-columns .bg-white:hover { border-color:#c9ad7b; }
 .fc-premium-alerts .bg-white { border-radius:13px; border-color:#eee0d7; }
 @media (max-width:640px) { .fc-dashboard-hero::after { opacity:.35; } .fc-premium-kpis > div { min-height:124px; padding:15px; } }
+
+
+@media print { header, nav, button, form { display:none !important; } main { padding:0 !important; max-width:none !important; } .fc-workspace { break-inside:avoid; } body { background:white !important; } }

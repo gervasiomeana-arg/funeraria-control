@@ -1,4 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { OperationalWorkspace } from './OperationalWorkspace';
+import { operationalError, balanceFor, currency } from './domain';
+import { ServiceEvidence } from './ServiceEvidence';
+import { OperationalHistory } from './OperationalHistory';
 
 
 // Public browser key only. No service-role credentials or database passwords.
@@ -36,6 +40,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [recoveryCooldownUntil, setRecoveryCooldownUntil] = useState(0);
   const [accessToken, setAccessToken] = useState('');
   const [authenticatedUserId, setAuthenticatedUserId] = useState('');
+  const [membershipRole, setMembershipRole] = useState('');
+  const paymentAttempt = useRef<{fingerprint:string;id:string}|null>(null);
   // Keep the Google session valid during long operational shifts.
   useEffect(() => {
     if (!signedIn || !accessToken) return;
@@ -86,7 +92,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [operationalDetails, setOperationalDetails] = useState('');
   const [operationalFields,setOperationalFields] = useState<Record<string,string>>({});
   const moduleFields: Record<string,Array<{key:string;label:string;type?:string}>> = {
-    agenda:[{key:'date',label:'Fecha',type:'date'},{key:'time',label:'Hora',type:'time'},{key:'service',label:'Expediente'},{key:'responsible',label:'Responsable'}],
+    agenda:[{key:'date',label:'Fecha',type:'date'},{key:'time',label:'Hora',type:'time'},{key:'end_time',label:'Hora de cierre',type:'time'},{key:'resource',label:'Recurso reservado'},{key:'service',label:'Expediente'},{key:'responsible',label:'Responsable'}],
     familias:[{key:'contact',label:'Contacto familiar'},{key:'phone',label:'Teléfono',type:'tel'},{key:'email',label:'Correo',type:'email'},{key:'service',label:'Expediente'}],
     inventario:[{key:'sku',label:'Código SKU'},{key:'quantity',label:'Existencias',type:'number'},{key:'minimum',label:'Stock mínimo',type:'number'},{key:'unit',label:'Unidad'}],
     recursos:[{key:'kind',label:'Tipo de recurso'},{key:'responsible',label:'Responsable'},{key:'availability',label:'Disponibilidad'},{key:'branch',label:'Sucursal'}],
@@ -94,13 +100,16 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     admin:[{key:'setting',label:'Configuración'},{key:'value',label:'Valor'},{key:'responsible',label:'Responsable'}]
   };
   const [operationalRecords, setOperationalRecords] = useState<Array<{id:string;module:string;title:string;details:Record<string,unknown>;created_at:string}>>([]);
-  const loadOperationalRecords = async (token:string, companyId:string) => {
-    const response = await fetch(SUPABASE_URL+'/rest/v1/operational_records?select=id,module,title,details,created_at&company_id=eq.'+encodeURIComponent(companyId)+'&order=created_at.desc&limit=10000',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
-    if (!response.ok) throw new Error('No se pudieron consultar los módulos operativos (HTTP '+response.status+').');
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de módulos.');
-    setOperationalRecords(rows);
+  const readAll = async (table:string,select:string,token:string,companyId:string) => {
+    const rows:any[]=[];
+    for(let offset=0;;offset+=500){
+      const response=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?select='+select+'&company_id=eq.'+encodeURIComponent(companyId)+'&order=id&limit=500&offset='+offset,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token}});
+      if(!response.ok)throw new Error('No se pudieron cargar los registros (HTTP '+response.status+').');
+      const page=await response.json();if(!Array.isArray(page))throw new Error('Respuesta de datos inválida.');
+      rows.push(...page);if(page.length<500)return rows;
+    }
   };
+  const loadOperationalRecords = async (token:string, companyId:string) => {setOperationalRecords(await readAll('operational_records','id,module,title,details,created_at',token,companyId));};
   const patchReal = async (table:string,id:string,payload:Record<string,unknown>) => {
     if (!accessToken || !realCompanyId) throw new Error('Sesión requerida');
     const response = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(id)+'&company_id=eq.'+encodeURIComponent(realCompanyId),{
@@ -133,6 +142,9 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const saveOperationalRecord = async (event:React.FormEvent) => {
     event.preventDefault();
     if (!accessToken || !realCompanyId || !operationalTitle.trim()) {setMessage('Iniciá sesión e indicá un título.');return;}
+    const validation = operationalError(operationalModule, operationalFields, operationalRecords, editingOperationalId);
+    if (validation) { setMessage(validation); return; }
+    if (operationalModule === 'admin' && membershipRole !== 'owner') { setMessage('Solo el propietario puede cambiar la configuración.'); return; }
     setRealDataBusy(true);
     try {
       if (editingOperationalId) await patchReal('operational_records',editingOperationalId,{title:operationalTitle.trim(),details:{...operationalFields,description:operationalDetails.trim()},updated_at:new Date().toISOString()});
@@ -148,7 +160,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const requestReal = async (endpoint: string, token: string, payload: Record<string, unknown>) => {
     const response = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
       method: 'POST',
-      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Prefer: 'return=minimal'},
+      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Prefer: 'return=minimal,resolution=ignore-duplicates'},
       body: JSON.stringify(payload)
     });
     if (!response.ok) {
@@ -156,15 +168,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       throw new Error('Supabase HTTP ' + response.status + ': ' + (details.message || 'No se pudo guardar.'));
     }
   };
-  const loadRealPayments = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/budget_payments?select=id,budget_id,amount_mxn,method,reference&company_id=eq.' + encodeURIComponent(companyId) + '&limit=1000', {
-      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
-    });
-    if (!response.ok) throw new Error('No se pudieron consultar los pagos reales (HTTP ' + response.status + ').');
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de pagos.');
-    setRealPayments(rows);
-  };
+  const loadRealPayments = async (token:string,companyId:string) => {setRealPayments(await readAll('budget_payments','id,budget_id,amount_mxn,method,reference',token,companyId));};
   const saveRealBudget = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!accessToken || !realCompanyId) { setMessage('Iniciá sesión para guardar un presupuesto real.'); return; }
@@ -194,7 +198,11 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     if (!['efectivo','tarjeta_debito','tarjeta_credito','transferencia_spei'].includes(paymentMethodReal)) { setMessage('Método de pago inválido.'); return; }
     setRealDataBusy(true);
     try {
-      await requestReal('budget_payments',accessToken,{company_id:realCompanyId,budget_id:budget.id,amount_mxn:money(amount),method:paymentMethodReal,reference:paymentReferenceReal.trim()||null});
+      const payload={company_id:realCompanyId,budget_id:budget.id,amount_mxn:money(amount),method:paymentMethodReal,reference:paymentReferenceReal.trim()||null};
+      const fingerprint=JSON.stringify(payload);
+      if(paymentAttempt.current?.fingerprint!==fingerprint)paymentAttempt.current={fingerprint,id:crypto.randomUUID()};
+      await requestReal('budget_payments?on_conflict=id',accessToken,{...payload,id:paymentAttempt.current.id});
+      paymentAttempt.current=null;
       await loadRealPayments(accessToken,realCompanyId);
       setPaymentAmountMxn('');
       setPaymentReferenceReal('');
@@ -202,25 +210,8 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setRealDataBusy(false); }
   };
-  const loadRealBudgets = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/budgets?select=id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status&company_id=eq.' + encodeURIComponent(companyId) + '&limit=1000', {
-      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
-    });
-    if (!response.ok) throw new Error('No se pudieron consultar presupuestos reales (HTTP ' + response.status + ').');
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de presupuestos.');
-    setRealBudgets(rows);
-  };
-
-  const loadRealServices = async (token: string, companyId: string) => {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/funeral_services?select=id,reference,status,deceased_name,contact_name,notes&company_id=eq.' + encodeURIComponent(companyId) + '&order=created_at.desc&limit=20', {
-      headers: {apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token}
-    });
-    if (!response.ok) throw new Error('No se pudieron consultar los expedientes reales (HTTP ' + response.status + ').');
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('Respuesta inválida de expedientes.');
-    setRealServices(rows);
-  };
+  const loadRealBudgets = async (token:string,companyId:string) => {setRealBudgets(await readAll('budgets','id,service_id,subtotal_mxn,discount_mxn,tax_mxn,status',token,companyId));};
+  const loadRealServices = async (token:string,companyId:string) => {setRealServices(await readAll('funeral_services','id,reference,status,deceased_name,contact_name,notes',token,companyId));};
   const saveRealService = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!accessToken || !realCompanyId || !authenticatedUserId) { setMessage('Iniciá sesión con una funeraria autorizada.'); return; }
@@ -319,6 +310,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         return;
       }
       const companyId = memberships[0].company_id;
+      setMembershipRole(memberships[0].role);
       setAuthorizedCompanies(memberships.map(item=>item.company_id+' ('+item.role+')'));
       setAccessToken(oauthToken);
       setAuthenticatedUserId(identity.id);
@@ -356,6 +348,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const memberships: Array<{company_id:string;role:string}> = await membershipsResponse.json();
       if (cancelled || !memberships.length) return;
       const companyId = memberships[0].company_id;
+      setMembershipRole(memberships[0].role);
       setAccessToken(session.access_token);
       setAuthenticatedUserId(identity.id);
       setRealCompanyId(companyId);
@@ -456,7 +449,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   </div>;
   return <div className="border-b border-[#d9e4df] bg-[#eef4f0] px-4 py-2 text-xs text-[#31564e]">
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-      <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Sin datos ficticios</span>
+      <span><strong>Supabase:</strong> {signedIn ? 'Sesión verificada' : 'Conexión disponible · sin sesión'} · Registros de tu funeraria</span>
       <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} className="rounded-lg border border-[#c5d8cf] px-3 py-1.5 font-semibold hover:bg-white">{open ? 'Cerrar conexión' : 'Ingresar con Google'}</button>
     </div>
     {open && <div className="mx-auto mt-3 max-w-7xl rounded-xl border border-[#c5d8cf] bg-white p-4">
@@ -475,6 +468,9 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
       {signedIn && realCompanyId && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
+        {activeView==='inventario' && <OperationalHistory records={operationalRecords} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
+        <OperationalWorkspace view={activeView||'dashboard'} services={realServices} budgets={realBudgets} payments={realPayments} records={operationalRecords} onEdit={item=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}} />
+        {activeView==='servicios' && <ServiceEvidence services={realServices} token={accessToken} companyId={realCompanyId} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         {activeView==='dashboard' && <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-white p-4"><strong className="block text-2xl">{realServices.length}</strong><span>Expedientes reales consultados</span></div>
           <div className="rounded-lg bg-white p-4"><strong className="block text-2xl">{realBudgets.length}</strong><span>Presupuestos reales consultados</span></div>
@@ -514,27 +510,27 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
           <h3 className="font-semibold">Presupuestos reales</h3>
           <p className="mt-1 text-slate-500">Presupuestos registrados en Supabase para esta funeraria.</p>
-          {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-100 p-2"><span>{b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))}</span><select disabled={realDataBusy} value={budgetStatusDrafts[b.id]||b.status} onChange={event=>{setBudgetStatusDrafts(prev=>({...prev,[b.id]:event.target.value}));void changeBudgetStatus(b.id,event.target.value);}} className="rounded border p-2">{['draft','pending','approved','paid','cancelled'].map(status=><option key={status} value={status}>{status}</option>)}</select></li>)}</ul>}
+          {realBudgets.length === 0 ? <p className="mt-2 text-slate-500">No hay presupuestos reales registrados.</p> : <ul className="mt-2 space-y-1">{realBudgets.map(b => <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-100 p-2"><span>{realServices.find(s=>s.id===b.service_id)?.reference||b.service_id} · {new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(b.subtotal_mxn)-Number(b.discount_mxn)+Number(b.tax_mxn))} · Saldo: {currency(balanceFor(b,realPayments))} · {balanceFor(b,realPayments)===0?'Liquidado':realPayments.some(p=>p.budget_id===b.id)?'Abono parcial':'Sin abonos'}</span><select aria-label={'Estado del presupuesto '+b.id} disabled={realDataBusy} value={budgetStatusDrafts[b.id]||b.status} onChange={event=>{setBudgetStatusDrafts(prev=>({...prev,[b.id]:event.target.value}));void changeBudgetStatus(b.id,event.target.value);}} className="rounded border p-2">{['draft','pending','approved','paid','cancelled'].map(status=><option key={status} value={status}>{status}</option>)}</select></li>)}</ul>}
           <button type="button" disabled={realDataBusy} onClick={() => {setRealDataBusy(true);Promise.all([loadRealBudgets(accessToken,realCompanyId),loadRealPayments(accessToken,realCompanyId)]).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="mt-2 text-xs font-semibold underline">Actualizar presupuestos reales</button>
         </div>
         </div>}
         {(['agenda','familias','inventario','recursos','reportes','admin'].includes(activeView || '')) && <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-3">
           <h3 className="font-semibold">Registros reales de otros módulos — Supabase</h3>
           <p className="text-xs text-slate-600">Agenda, familias, inventario, personal y recursos, reportes y administración. Los registros están aislados por funeraria.</p>
-          <form onSubmit={saveOperationalRecord} className="space-y-2">
+          {operationalModule==='admin'&&membershipRole!=='owner' ? <p>Solo el propietario puede modificar la configuración.</p> : <form onSubmit={saveOperationalRecord} className="space-y-2">
             <label className="block text-sm">Módulo<select value={operationalModule} onChange={event=>setOperationalModule(event.target.value as typeof operationalModule)} className="block w-full rounded border p-2">
               {([activeView] as string[]).filter(module=>moduleFields[module]).map(module=><option key={module} value={module}>{module}</option>)}
             </select></label>
             <label className="block text-sm">Título<input required value={operationalTitle} onChange={event=>setOperationalTitle(event.target.value)} className="block w-full rounded border p-2"/></label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{(moduleFields[operationalModule]||[]).map(field=><label key={field.key} className="block text-sm">{field.label}<input type={field.type||'text'} value={operationalFields[field.key]||''} onChange={event=>setOperationalFields(prev=>({...prev,[field.key]:event.target.value}))} className="block w-full rounded border p-2"/></label>)}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{(moduleFields[operationalModule]||[]).map(field=><label key={field.key} className="block text-sm">{field.label}{field.key==='service' ? <select value={operationalFields.service||''} onChange={event=>{const value=event.currentTarget.value;setOperationalFields(prev=>({...prev,service:value}));}} className="block w-full rounded border p-2"><option value="">Sin expediente asignado</option>{realServices.map(service=><option key={service.id} value={service.reference}>{service.reference} · {service.deceased_name}</option>)}</select> : field.key==='resource' ? <select value={operationalFields.resource||''} onChange={event=>{const value=event.currentTarget.value;setOperationalFields(prev=>({...prev,resource:value}));}} className="block w-full rounded border p-2"><option value="">Sin recurso reservado</option>{operationalRecords.filter(record=>record.module==='recursos').map(record=><option key={record.id} value={record.id}>{record.title}</option>)}</select> : <input type={field.type||'text'} value={operationalFields[field.key]||''} min={field.type==='number'?0:undefined} step={field.type==='number'?1:undefined} onChange={event=>{const value=event.currentTarget.value;setOperationalFields(prev=>({...prev,[field.key]:value}));}} className="block w-full rounded border p-2"/>}</label>)}</div>
             <label className="block text-sm">Descripción<textarea value={operationalDetails} onChange={event=>setOperationalDetails(event.target.value)} className="block w-full rounded border p-2"/></label>
-            <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{editingOperationalId?'Guardar cambios':'Guardar registro real'}</button>
-          </form>
+            <button type="submit" disabled={realDataBusy} className="rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">{editingOperationalId?'Guardar cambios':'Guardar registro real'}</button>{editingOperationalId&&<button type="button" className="ml-2 rounded border px-3 py-2" onClick={()=>{setEditingOperationalId('');setOperationalTitle('');setOperationalDetails('');setOperationalFields({});}}>Cancelar edición</button>}
+          </form>}
           <button type="button" disabled={realDataBusy} onClick={()=>{setRealDataBusy(true);loadOperationalRecords(accessToken,realCompanyId).catch(error=>setMessage(String(error))).finally(()=>setRealDataBusy(false));}} className="text-xs font-semibold underline">Actualizar registros reales</button>
           <div className="max-h-48 overflow-y-auto space-y-1">{operationalRecords.filter(item=>item.module===activeView).map(item=><div key={item.id} className="flex justify-between gap-2 rounded bg-slate-50 px-2 py-1 text-xs"><span><strong>{item.module}</strong> · {item.title} · {String(item.details?.description||'')}</span><button type="button" className="underline" onClick={()=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details?.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details||{}).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}}>Editar</button></div>)}</div>
         </section>}
         {(activeView === 'presupuestos' || activeView === 'dashboard') && <form onSubmit={saveRealPayment} className="mt-4 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-          <h3 className="font-semibold">Registrar abono real — Supabase</h3>
+          <h3 className="font-semibold">Registrar abono real — Supabase</h3><p className="text-sm text-slate-600">Los anticipos se registran también sobre cotizaciones en borrador. El saldo se calcula con los abonos; la aprobación comercial se gestiona por separado.</p>
           <label className="block text-sm">Presupuesto
             <select required value={paymentBudgetId} onChange={event=>setPaymentBudgetId(event.target.value)} className="block w-full rounded border p-2">
               <option value="">Seleccionar presupuesto</option>
@@ -594,3 +590,4 @@ const MainLayout: React.FC = () => {
 export default function App() {
   return <MainLayout />;
 }
+
