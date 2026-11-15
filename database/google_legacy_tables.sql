@@ -1,0 +1,1 @@
+do $$ declare t text; begin foreach t in array array['login_visits','staff_members','rooms','vehicles','inventory_items','inventory_movements'] loop execute format('create policy google_session_required on public.%I as restrictive for all to authenticated using ((select public.fc_google_session())) with check ((select public.fc_google_session()))',t); end loop; end; $$;
