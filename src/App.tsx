@@ -44,6 +44,23 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [accessToken, setAccessToken] = useState('');
   const [authenticatedUserId, setAuthenticatedUserId] = useState('');
   const [membershipRole, setMembershipRole] = useState('');
+  const [commercial,setCommercial]=useState<{status:string;trial_ends_at:string;paid_until:string|null;monthly_usd:number;requested_at:string|null}|null>(null);
+  const [commercialError,setCommercialError]=useState('');
+  const loadCommercial=async(token:string)=>{
+    const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_subscription_status',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'});
+    if(!response.ok)throw new Error('No se pudo verificar la suscripción.');
+    const result=await response.json();setCommercial(result);return result;
+  };
+  const requestSubscription=async()=>{
+    if(!accessToken)return;
+    try{
+      const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_request_subscription',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:'{}'});
+      if(!response.ok)throw new Error('No se pudo registrar la solicitud.');
+      await loadCommercial(accessToken);
+      setMessage('Solicitud de suscripción registrada. Contactá al equipo comercial por correo para coordinar el pago.');
+    }catch(e){setCommercialError(String(e));}
+  };
+
   const paymentAttempt = useRef<{fingerprint:string;id:string}|null>(null);
   // Keep the Google session valid during long operational shifts.
   useEffect(() => {
@@ -305,6 +322,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const identity = await identityResponse.json();
       if (!identity?.id) throw new Error('Identidad de Google inválida.');
       await recordLoginVisit(oauthToken,identity.id);
+      await loadCommercial(oauthToken);
       const membershipResponse = await fetch(SUPABASE_URL+'/rest/v1/company_memberships?select=company_id,role&active=eq.true',{headers});
       if (!membershipResponse.ok) throw new Error('No se pudieron consultar los permisos.');
       const memberships: Array<{company_id:string;role:string}> = await membershipResponse.json();
@@ -352,6 +370,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const memberships: Array<{company_id:string;role:string}> = await membershipsResponse.json();
       if (cancelled) return;
       await recordLoginVisit(session.access_token,identity.id);
+      await loadCommercial(session.access_token);
       if (cancelled) return;
       setAccessToken(session.access_token);setAuthenticatedUserId(identity.id);setSignedIn(true);
       if (!memberships.length) {setMessage('Tu cuenta de Google quedó registrada. El administrador debe habilitar el acceso a tu funeraria.');return;}
@@ -475,9 +494,16 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       {false && !signedIn && !recoveryMode && <button type="button" disabled={busy || Date.now() < recoveryCooldownUntil} onClick={requestRecovery} className="mt-3 text-xs font-semibold underline disabled:opacity-50">Crear o recuperar contraseña por correo</button>}
       <p role="status" className="mt-3 text-[#49675e]">{message}</p>
       {authorizedCompanies.map(company=><p key={company} className="mt-1 text-[#31564e]">Empresa autorizada: {company}</p>)}
+      {signedIn && commercial && <section className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+        <strong>Suscripción FUNERARIA CONTROL — USD {commercial.monthly_usd}/mes</strong>
+        <p className="mt-1">{commercial.status==='legacy'?'Acceso existente conservado.':commercial.status==='active'?'Suscripción activa hasta '+new Date(commercial.paid_until||'').toLocaleDateString('es-MX'):commercial.status==='trial'?'Prueba gratuita hasta '+new Date(commercial.trial_ends_at).toLocaleString('es-MX'):'Tu prueba o suscripción ha vencido. Solicitá la activación comercial.'}</p>
+        {commercial.status!=='active'&&commercial.status!=='legacy'&&<button type="button" onClick={()=>void requestSubscription()} className="mt-2 rounded-lg bg-[#173a3e] px-4 py-2 font-semibold text-white">Solicitar suscripción de USD 50/mes</button>}
+        {commercial.requested_at&&<p className="mt-2">Solicitud registrada. El pago y la activación se coordinan por correo electrónico.</p>}
+        {commercialError&&<p role="alert">{commercialError}</p>}
+      </section>}
       {signedIn && activeView==='admin' && <AdminUsersPanel url={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} token={accessToken} onUnlock={()=>setAdminUnlocked(true)} onLock={()=>setAdminUnlocked(false)}/> }
       {signedIn && !realCompanyId && <p className="mt-4 rounded border p-4">Tu cuenta quedó registrada. La habilitación de tu funeraria está pendiente.</p>}
-      {signedIn && realCompanyId && (activeView!=='admin'||adminUnlocked) && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
+      {signedIn && realCompanyId && (commercial?.status==='legacy'||commercial?.status==='active'||(commercial?.status==='trial'&&Date.now()<new Date(commercial.trial_ends_at).getTime())) && (activeView!=='admin'||adminUnlocked) && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
         {activeView==='inventario' && <OperationalHistory records={operationalRecords} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         {activeView==='familias' && ['owner','manager'].includes(membershipRole) && <FamilyAccess services={realServices} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
         <OperationalWorkspace view={activeView||'dashboard'} services={realServices} budgets={realBudgets} payments={realPayments} records={operationalRecords} onEdit={item=>{setEditingOperationalId(item.id);setOperationalModule(item.module as typeof operationalModule);setOperationalTitle(item.title);setOperationalDetails(String(item.details.description||''));setOperationalFields(Object.fromEntries(Object.entries(item.details).filter(([key])=>key!=='description').map(([key,value])=>[key,String(value??'')])));}} />
