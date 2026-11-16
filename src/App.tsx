@@ -16,7 +16,17 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const signInWithGoogle = () => {
-    const redirectTo = window.location.origin + window.location.pathname;
+    // AI Studio runs the preview in an embedded sandbox. Google OAuth cannot
+    // reliably complete a top-level redirect back into that iframe.
+    // Use the approved published origin for interactive Google authentication.
+    const publishedOrigin = 'https://funeraria-control.ai.studio';
+    const isPublished = window.location.origin === publishedOrigin;
+    if (!isPublished) {
+      window.open(publishedOrigin, '_blank', 'noopener,noreferrer');
+      setMessage('Se abrió la aplicación publicada para ingresar con Google. La vista previa de AI Studio no admite este inicio de sesión.');
+      return;
+    }
+    const redirectTo = publishedOrigin + '/';
     window.location.assign(SUPABASE_URL + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(redirectTo));
   };
   const [loginHistoryMessage, setLoginHistoryMessage] = useState('');
