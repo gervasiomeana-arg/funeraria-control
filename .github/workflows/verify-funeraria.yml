@@ -1,0 +1,30 @@
+name: Verificacion gratuita Funeraria Control
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Pruebas de dominio existentes
+        run: npm test
+      - name: Revision TypeScript
+        run: npm run lint
+      - name: Compilacion
+        run: npm run build
+      - name: Instalar Playwright temporalmente
+        run: npm install --no-save --package-lock=false playwright
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke test sitio publicado (sin alterar datos)
+        run: node tests/public-smoke.mjs
