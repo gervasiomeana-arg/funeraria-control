@@ -67,7 +67,10 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
       const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_request_subscription',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:'{}'});
       if(!response.ok)throw new Error('No se pudo registrar la solicitud.');
       await loadCommercial(accessToken);
-      setMessage('Solicitud de suscripción registrada. Contactá al equipo comercial por correo para coordinar el pago.');
+      const subject=encodeURIComponent('FUNERARIA CONTROL - Solicitud de suscripción USD 50/mes');
+      const body=encodeURIComponent('Solicito activar mi suscripción mensual de USD 50 para FUNERARIA CONTROL.\nID de usuario: '+authenticatedUserId+'\nPor favor, envíenme las instrucciones de pago.');
+      window.location.href='mailto:gervasiomeana@gmail.com?subject='+subject+'&body='+body;
+      setMessage('Solicitud registrada. Se abrió tu correo para enviar la solicitud de contratación.');
     }catch(e){setCommercialError(String(e));}
   };
 
