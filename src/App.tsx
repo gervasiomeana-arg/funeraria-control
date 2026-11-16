@@ -56,6 +56,24 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
   const [membershipRole, setMembershipRole] = useState('');
   const [commercial,setCommercial]=useState<{status:string;trial_ends_at:string;paid_until:string|null;monthly_usd:number;requested_at:string|null}|null>(null);
   const [commercialError,setCommercialError]=useState('');
+  const [trialCompanyName,setTrialCompanyName]=useState('');
+  const startTrial=async()=>{
+    if(!accessToken || !trialCompanyName.trim())return;
+    try{
+      setBusy(true);
+      const headers={apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'};
+      const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_start_trial',{method:'POST',headers,body:JSON.stringify({p_company_name:trialCompanyName.trim()})});
+      if(!response.ok)throw new Error('No se pudo crear la funeraria de prueba.');
+      const result=await response.json();
+      if(!result.created)throw new Error('Ya existe una funeraria vinculada a esta cuenta.');
+      setRealCompanyId(result.company_id);
+      setMembershipRole('owner');
+      setAuthorizedCompanies([trialCompanyName+' (owner)']);
+      setMessage('Prueba gratuita de 48 horas activada.');
+      await loadCommercial(accessToken);
+    }catch(e){setCommercialError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  };
+
   const loadCommercial=async(token:string)=>{
     const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/fc_subscription_status',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'});
     if(!response.ok)throw new Error('No se pudo verificar la suscripción.');
@@ -515,6 +533,7 @@ const SupabaseConnectionPanel: React.FC<{ onAuthChange?: (authenticated: boolean
         {commercialError&&<p role="alert">{commercialError}</p>}
       </section>}
       {signedIn && activeView==='admin' && <AdminUsersPanel url={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} token={accessToken} onUnlock={()=>setAdminUnlocked(true)} onLock={()=>setAdminUnlocked(false)}/> }
+      {signedIn && !realCompanyId && commercial?.status==='trial' && new Date(commercial.trial_ends_at).getTime()>Date.now() && <section className="mt-4 rounded-xl border border-emerald-200 bg-white p-4"><label className="block font-semibold">Nombre de tu funeraria<input className="mt-2 block w-full rounded border p-2" value={trialCompanyName} onChange={e=>setTrialCompanyName(e.target.value)} maxLength={120} placeholder="Nombre de la funeraria" /></label><button type="button" disabled={busy||trialCompanyName.trim().length<3} onClick={()=>void startTrial()} className="mt-3 rounded bg-[#173a3e] px-4 py-2 text-white disabled:opacity-50">Activar prueba de 2 días</button></section>}
       {signedIn && !realCompanyId && <p className="mt-4 rounded border p-4">Tu cuenta quedó registrada. La habilitación de tu funeraria está pendiente.</p>}
       {signedIn && realCompanyId && (commercial?.status==='legacy'||commercial?.status==='active'||(commercial?.status==='trial'&&Date.now()<new Date(commercial.trial_ends_at).getTime())) && (activeView!=='admin'||adminUnlocked) && <section className="mt-4 rounded-xl border border-[#d6e1da] bg-[#f7faf8] p-4">
         {activeView==='inventario' && <OperationalHistory records={operationalRecords} companyId={realCompanyId} token={accessToken} apiUrl={SUPABASE_URL} apiKey={SUPABASE_PUBLISHABLE_KEY} />}
